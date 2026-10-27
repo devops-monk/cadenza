@@ -3,10 +3,7 @@
 // Scene comes from the URL hash: #create, #library, #models, #drawer, #home, #settings, plus ",dark".
 
 (function () {
-  const [scene, theme, mode] = (location.hash.slice(1) || "create").split(",");
-  // ",rec": recording for the website clip. Playback runs on the page clock,
-  // so headless Chrome's virtual time renders the same frame every time.
-  const rec = mode === "rec";
+  const [scene, theme] = (location.hash.slice(1) || "create").split(",");
   try { localStorage.setItem("cadenza-theme", theme === "dark" ? "dark" : "light"); } catch {}
 
   const now = Date.now();
@@ -115,25 +112,6 @@
 
   const listeners = {};
   const emit = (name, payload) => (listeners[name] || []).forEach((fn) => fn({ payload }));
-  if (rec) {
-    const media = HTMLMediaElement.prototype;
-    const startAt = 41; // seconds into the song when the clip starts
-    Object.defineProperty(media, "paused", { get() { return !this._t0; } });
-    Object.defineProperty(media, "duration", { get() { return 175; } });
-    Object.defineProperty(media, "currentTime", {
-      get() { return this._t0 ? startAt + (performance.now() - this._t0) / 1000 : 0; },
-      set() {},
-    });
-    media.play = function () {
-      if (!this._t0) {
-        this._t0 = performance.now();
-        this.dispatchEvent(new Event("play"));
-        setInterval(() => this.dispatchEvent(new Event("timeupdate")), 50);
-      }
-      return Promise.resolve();
-    };
-    media.pause = function () {};
-  }
   window.__TAURI__ = {
     core: { invoke: async (cmd) => (handlers[cmd] ? handlers[cmd]() : null) },
     event: { listen: async (name, fn) => { (listeners[name] ||= []).push(fn); return () => {}; } },
@@ -160,12 +138,5 @@
     if (scene === "drawer") setTimeout(() => click(`[data-open="${tracks[0].id}"]`), 300);
     if (scene === "settings") click('#providerSeg [data-provider="ollama"]');
     setTimeout(() => { document.body.dataset.ready = "1"; }, 1600);
-    if (rec && jobs[0]) {
-      const t0 = performance.now();
-      setInterval(() => {
-        const frames = 1840 + Math.floor((performance.now() - t0) / 1000 * 41);
-        emit("job", { ...jobs[0], detail: `semantic stage: ${frames}/4375 frames · 41 tok/s` });
-      }, 250);
-    }
   }, 300));
 })();

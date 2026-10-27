@@ -25,7 +25,7 @@ trap 'rm -rf "$stage"' EXIT
 rsync -a --exclude tools/ "$root/site/" "$stage/"
 for page in "$stage"/*.html; do
     SITE="$stage" perl -i -MDigest::MD5 -pe '
-        s{((?:images/[\w.-]+\.(?:png|jpe?g|webp|svg|ico|mp4|webm))|style\.css|main\.js)(?=["\x27)\s])}{
+        s{((?:images/[\w.-]+\.(?:png|jpe?g|webp|svg|ico))|style\.css|main\.js)(?=["\x27)\s])}{
             my $f = "$ENV{SITE}/$1";
             if (open(my $fh, "<", $f)) { binmode $fh; "$1?v=" . substr(Digest::MD5->new->addfile($fh)->hexdigest, 0, 8) } else { $1 }
         }ge' "$page"
