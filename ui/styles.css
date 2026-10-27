@@ -311,6 +311,17 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .provider-pane { display: none; }
 .provider-pane.active { display: block; }
 .settings-save { display: flex; gap: 14px; align-items: center; justify-content: flex-end; position: sticky; bottom: 0; padding: 14px 0; background: linear-gradient(to bottom, transparent, var(--bg) 35%); }
+.storage-bar { display: flex; height: 10px; border-radius: 6px; overflow: hidden; background: var(--surface-2); border: 1px solid var(--line); margin-bottom: 14px; }
+.storage-bar i { display: block; height: 100%; width: 0; transition: width .4s ease; }
+.seg-models { background: var(--accent-2); }
+.seg-runtime { background: var(--accent-3); }
+.seg-songs { background: var(--accent); }
+.storage-rows { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.storage-row { display: grid; grid-template-columns: 12px 1fr auto 64px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.storage-row:last-child { border-bottom: 0; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; }
+.storage-size { font-variant-numeric: tabular-nums; font-weight: 600; }
+.storage-actions { margin: 6px 0 10px; }
 .log { background: #0e0d13; color: #cfc9dc; font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; border-radius: 10px; padding: 12px; max-height: 280px; overflow: auto; white-space: pre-wrap; margin: 12px 0 0; }
 
 /* ----------------------------------------------------------------- player */

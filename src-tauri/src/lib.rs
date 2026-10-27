@@ -170,6 +170,76 @@ fn model_delete(app: AppHandle, state: State<AppState>, id: String) -> CommandRe
     Ok(())
 }
 
+// ------------------------------------------------------------------- storage
+
+fn dir_size(path: &std::path::Path) -> u64 {
+    let Ok(meta) = std::fs::symlink_metadata(path) else { return 0 };
+    if !meta.is_dir() {
+        return meta.len();
+    }
+    std::fs::read_dir(path).map(|entries| entries.flatten().map(|entry| dir_size(&entry.path())).sum()).unwrap_or(0)
+}
+
+#[derive(Serialize)]
+struct StorageInfo {
+    data_dir: String,
+    models_dir: String,
+    /// Only the files Cadenza downloaded, not whatever else shares the folder.
+    models_bytes: u64,
+    models_count: usize,
+    runtime_bytes: u64,
+    library_dir: String,
+    library_bytes: u64,
+    library_count: usize,
+    free_bytes: Option<u64>,
+}
+
+#[tauri::command]
+fn storage_info(state: State<AppState>) -> StorageInfo {
+    let models_dir = state.models_dir();
+    let mut models_bytes = 0;
+    let mut models_count = 0;
+    for item in catalog::items().iter().filter(|item| item.kind != catalog::Kind::LlmRuntime) {
+        let path = models_dir.join(item.filename);
+        let size = dir_size(&path) + dir_size(&path.with_file_name(format!("{}.part", item.filename)));
+        if size > 0 {
+            models_bytes += size;
+            models_count += 1;
+        }
+    }
+    let library = state.library.lock().unwrap();
+    StorageInfo {
+        data_dir: state.data_dir.display().to_string(),
+        models_dir: models_dir.display().to_string(),
+        models_bytes,
+        models_count,
+        runtime_bytes: dir_size(&state.runtime_dir()),
+        library_dir: library.dir.display().to_string(),
+        library_bytes: dir_size(&library.dir),
+        library_count: library.tracks.len(),
+        free_bytes: free_space(&models_dir),
+    }
+}
+
+/// Deletes every model and the llama.cpp runtime Cadenza downloaded, by
+/// catalog file name: a custom models folder may hold other files too.
+#[tauri::command]
+fn remove_all_models(app: AppHandle, state: State<AppState>) -> CommandResult<u64> {
+    for item in catalog::items() {
+        state.downloads.cancel(item.id);
+    }
+    state.engine.lock().unwrap().stop();
+    state.llm.lock().unwrap().stop();
+    let before = storage_info(state.clone());
+    let (models_dir, runtime_dir) = (state.models_dir(), state.runtime_dir());
+    for item in catalog::items() {
+        downloads::delete(&item, &models_dir, &runtime_dir).map_err(err)?;
+    }
+    let after = storage_info(state);
+    let _ = app.emit("engine", ());
+    Ok((before.models_bytes + before.runtime_bytes).saturating_sub(after.models_bytes + after.runtime_bytes))
+}
+
 // -------------------------------------------------------------------- engine
 
 #[tauri::command]
@@ -318,7 +388,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_settings, save_settings, system_info,
-            catalog, download_start, download_cancel, model_delete,
+            catalog, download_start, download_cancel, model_delete, storage_info, remove_all_models,
             engine_status, engine_start, engine_stop, engine_log, llm_test, ollama_models,
             create_song, write_lyrics, cancel_job, list_jobs, dismiss_job,
             list_tracks, track_audio, update_track, delete_track, export_track, track_file_name, library_dir,

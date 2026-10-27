@@ -846,9 +846,58 @@ function fillSettings() {
   $("#enginePath").value = s.engine_path;
   $("#modelsDir").value = s.models_dir;
   setProvider(s.llm_provider);
+  refreshStorage();
   const sys = state.system;
   if (sys) $("#systemInfo").textContent = `${sys.cpu} · ${sys.cores} cores · ${sys.ram_gb} GB memory · ${sys.os} (${sys.arch}). The music engine and llama.cpp run on the GPU through Metal.`;
 }
+
+let storage = null;
+
+async function refreshStorage() {
+  try {
+    storage = await invoke("storage_info");
+  } catch {
+    return;
+  }
+  if (!storage) return;
+  const total = storage.models_bytes + storage.runtime_bytes + storage.library_bytes;
+  const pct = (bytes) => (total ? `${(bytes / total) * 100}%` : "0");
+  $("#storageBar .seg-models").style.width = pct(storage.models_bytes);
+  $("#storageBar .seg-runtime").style.width = pct(storage.runtime_bytes);
+  $("#storageBar .seg-songs").style.width = pct(storage.library_bytes);
+  $("#storageModels").textContent = storage.models_bytes ? fmtBytes(storage.models_bytes) : "None";
+  $("#storageModelsMeta").textContent = storage.models_count ? `${storage.models_count} file${storage.models_count === 1 ? "" : "s"} · ${storage.models_dir}` : storage.models_dir;
+  $("#storageRuntime").textContent = storage.runtime_bytes ? fmtBytes(storage.runtime_bytes) : "None";
+  $("#storageSongs").textContent = storage.library_bytes ? fmtBytes(storage.library_bytes) : "None";
+  $("#storageSongsMeta").textContent = `${storage.library_count} track${storage.library_count === 1 ? "" : "s"}`;
+  $("#storageFree").textContent = `Using ${fmtBytes(total)} in all${storage.free_bytes != null ? ` · ${fmtBytes(storage.free_bytes)} free on this disk` : ""}.`;
+  $("#removeAllModels").disabled = !(storage.models_bytes + storage.runtime_bytes);
+}
+
+$$("[data-reveal]").forEach((b) =>
+  b.addEventListener("click", async () => {
+    const path = storage && storage[b.dataset.reveal];
+    if (!path) return;
+    try { await reveal(path); } catch (e) { toast(String(e), true); }
+  })
+);
+
+$("#removeAllModels").addEventListener("click", async () => {
+  if (!storage) return;
+  const size = fmtBytes(storage.models_bytes + storage.runtime_bytes);
+  const message = `Remove all downloaded models and the llama.cpp runtime (${size})?\n\nYour songs are kept. You can download models again from the Models page.`;
+  const ok = T.dialog ? await T.dialog.ask(message, { title: "Remove all models", kind: "warning" }) : confirm(message);
+  if (!ok) return;
+  try {
+    const freed = await invoke("remove_all_models");
+    toast(`Removed. ${fmtBytes(freed)} freed.`);
+  } catch (e) {
+    toast(String(e), true);
+  }
+  refreshStorage();
+  refreshCatalog();
+  refreshEngine();
+});
 
 let provider = "builtin";
 function setProvider(value) {
@@ -966,6 +1015,7 @@ listen("download", (p) => {
   if (p.state !== "running") {
     refreshCatalog();
     refreshEngine();
+    if (state.view === "settings") refreshStorage();
   } else if (state.view === "models") renderModels();
 });
 listen("engine-log", (line) => {

@@ -92,6 +92,13 @@
     track_audio: () => wav(),
     engine_log: () => ["[Server] listening on 127.0.0.1:18087", "[Load] YuE2-3B-Q6_K.gguf on MTL0 (Apple M1 Pro)"],
     library_dir: () => "",
+    storage_info: () => ({
+      data_dir: "~/Library/Application Support/app.cadenza.studio",
+      models_dir: "~/Library/Application Support/app.cadenza.studio/models",
+      models_bytes: gb(8.16), models_count: 4, runtime_bytes: gb(0.04),
+      library_dir: "~/Library/Application Support/app.cadenza.studio/library",
+      library_bytes: gb(0.031), library_count: tracks.length, free_bytes: gb(212),
+    }),
   };
 
   window.__TAURI__ = {

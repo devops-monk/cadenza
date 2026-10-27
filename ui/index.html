@@ -303,6 +303,38 @@
           </section>
 
           <section class="card settings-card">
+            <h3>Storage</h3>
+            <div class="storage-bar" id="storageBar"><i class="seg-models"></i><i class="seg-runtime"></i><i class="seg-songs"></i></div>
+            <div class="storage-rows">
+              <div class="storage-row">
+                <span class="swatch seg-models"></span>
+                <div><strong>Models</strong><div class="muted small" id="storageModelsMeta"></div></div>
+                <span class="storage-size" id="storageModels">—</span>
+                <button class="btn ghost small" data-reveal="models_dir">Show</button>
+              </div>
+              <div class="storage-row">
+                <span class="swatch seg-runtime"></span>
+                <div><strong>Language model runtime</strong><div class="muted small">llama.cpp</div></div>
+                <span class="storage-size" id="storageRuntime">—</span>
+                <span></span>
+              </div>
+              <div class="storage-row">
+                <span class="swatch seg-songs"></span>
+                <div><strong>Your songs</strong><div class="muted small" id="storageSongsMeta"></div></div>
+                <span class="storage-size" id="storageSongs">—</span>
+                <button class="btn ghost small" data-reveal="library_dir">Show</button>
+              </div>
+            </div>
+            <p class="hint" id="storageFree"></p>
+            <div class="row storage-actions">
+              <button class="btn ghost small" data-reveal="data_dir">Show app data folder</button>
+              <span class="spacer"></span>
+              <button class="btn danger small" id="removeAllModels">Remove all models</button>
+            </div>
+            <p class="hint">Uninstalling Cadenza keeps this data, so a reinstall doesn't download everything again. To free the space, remove the models here first. Your songs are kept unless you delete them from the Library or the folder.</p>
+          </section>
+
+          <section class="card settings-card">
             <h3>This machine</h3>
             <div class="muted small" id="systemInfo"></div>
           </section>
