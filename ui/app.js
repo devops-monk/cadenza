@@ -849,8 +849,12 @@ $("#view-models").addEventListener("click", async (e) => {
         toast(`Not enough disk space for ${entry.label} (${fmtBytes(entry.bytes)}).`, true);
         return;
       }
-      progress[d.dlStart] = { id: d.dlStart, state: "running", downloaded: entry.partial, total: entry.bytes, bytes_per_sec: 0 };
-      await invoke("download_start", { id: d.dlStart });
+      const started = await invoke("download_start", { id: d.dlStart });
+      for (const id of started) {
+        const e = state.catalog.entries.find((x) => x.id === id);
+        if (e) progress[id] = { id, state: "running", downloaded: e.partial, total: e.bytes, bytes_per_sec: 0 };
+      }
+      if (started.length > 1) toast(`Also downloading what ${entry.label} needs to work`);
     } else if (d.dlCancel) {
       await invoke("download_cancel", { id: d.dlCancel });
     } else if (d.dlDelete) {

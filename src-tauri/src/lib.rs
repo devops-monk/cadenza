@@ -144,10 +144,27 @@ fn catalog(state: State<AppState>) -> CatalogView {
 }
 
 #[tauri::command]
-fn download_start(app: AppHandle, state: State<AppState>, id: String) -> CommandResult<()> {
+fn download_start(app: AppHandle, state: State<AppState>, id: String) -> CommandResult<Vec<String>> {
     let item = catalog::find(&id).ok_or("unknown model")?;
-    state.downloads.start(app, item, state.models_dir(), state.runtime_dir());
-    Ok(())
+    // A model alone cannot make anything: bring along the files it works with,
+    // so one click gets a working set. Returns every id that started.
+    let mut ids = vec![id.clone()];
+    match item.kind {
+        catalog::Kind::Backbone => ids.extend(["yue-vae".to_string(), "yue-companion".to_string()]),
+        catalog::Kind::Llm => ids.push("llama-runtime".into()),
+        catalog::Kind::Transcriber => ids.extend(catalog::transcriber_pairs().iter().filter(|(t, _)| *t == id).map(|(_, base)| base.to_string())),
+        _ => {}
+    }
+    let (models_dir, runtime_dir) = (state.models_dir(), state.runtime_dir());
+    let mut started = Vec::new();
+    for want in ids {
+        let Some(item) = catalog::find(&want) else { continue };
+        if want == id || !downloads::installed(&item, &models_dir, &runtime_dir) {
+            state.downloads.start(app.clone(), item, models_dir.clone(), runtime_dir.clone());
+            started.push(want);
+        }
+    }
+    Ok(started)
 }
 
 #[tauri::command]
