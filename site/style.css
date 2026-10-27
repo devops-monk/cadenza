@@ -79,6 +79,9 @@ h4 { font-size: 19px; margin: 0 0 6px; letter-spacing: -.02em; }
 .hero .lead { margin-bottom: 34px; }
 .hero-ctas { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .window { max-width: 1060px; margin: 70px auto 0; border-radius: 14px; overflow: hidden; background: #1c1a24; box-shadow: 0 50px 100px -20px rgba(30, 20, 60, .35), 0 30px 60px -30px rgba(0, 0, 0, .4), 0 0 0 1px rgba(0, 0, 0, .08); }
+.hero-video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; background: #f3f1ee; }
+.hero-still { display: none; }
+@media (prefers-reduced-motion: reduce) { .hero-video { display: none; } .hero-still { display: block; } }
 .window-bar { height: 30px; display: flex; gap: 8px; align-items: center; padding: 0 14px; background: linear-gradient(#ececec, #e2e2e2); }
 @media (prefers-color-scheme: dark) { .window-bar { background: linear-gradient(#2c2c30, #232327); } }
 .window-bar i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
