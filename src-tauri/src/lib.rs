@@ -282,14 +282,78 @@ async fn ollama_models(url: String) -> CommandResult<Vec<String>> {
 // ---------------------------------------------------------------------- jobs
 
 #[tauri::command]
-fn create_song(app: AppHandle, request: jobs::SongRequest) -> CommandResult<jobs::Job> {
+async fn create_song(app: AppHandle, request: jobs::SongRequest) -> CommandResult<jobs::Job> {
     if request.description.trim().is_empty() && request.lyrics.trim().is_empty() && request.parent_id.is_none() {
-        return Err("describe the song, or paste lyrics".into());
+        return Err("Describe the song, or paste lyrics.".into());
     }
     if request.description.chars().count() > 1000 {
-        return Err("keep the description under 1000 characters".into());
+        return Err("Keep the description under 1000 characters.".into());
+    }
+    // Refuse what cannot work now, instead of queueing a job that fails.
+    let (settings, resource_dir, models_dir) = {
+        let state = app.state::<AppState>();
+        (state.settings(), state.resource_dir.clone(), state.models_dir())
+    };
+    if engine::locate_executable(&settings, resource_dir).is_none() {
+        return Err("The music engine is missing from this install. Reinstall Cadenza, or set the yue-server path in Settings.".into());
+    }
+    if let Err(missing) = engine::model_files(&settings, &models_dir) {
+        return Err(format!("Still needed before making music: {}. Open Models and press “Download what's needed”.", missing.join(", ")));
+    }
+    if jobs::needs_writer(&request) && jobs::resolve_llm(&app, &settings).await.is_none() {
+        return Err("Nothing can write the lyrics yet. Open Models and press “Download what's needed”, start Ollama, or paste your own lyrics.".into());
     }
     Ok(jobs::submit(app, request))
+}
+
+#[derive(Serialize)]
+struct LlmStatus {
+    ready: bool,
+    /// "builtin", "ollama" or "open_ai"
+    provider: Option<settings::LlmProvider>,
+    model: String,
+    /// Ollama stands in for the built-in model, which is not downloaded.
+    fallback: bool,
+}
+
+#[tauri::command]
+async fn llm_status(app: AppHandle) -> LlmStatus {
+    let settings = app.state::<AppState>().settings();
+    match jobs::resolve_llm(&app, &settings).await {
+        Some(resolved) => {
+            let model = match resolved.llm_provider {
+                settings::LlmProvider::Builtin => catalog::find(&resolved.llm_model).map(|item| item.label.to_string()).unwrap_or_default(),
+                settings::LlmProvider::Ollama => resolved.ollama_model.clone(),
+                settings::LlmProvider::OpenAi => resolved.openai_model.clone(),
+            };
+            LlmStatus { ready: true, fallback: resolved.llm_provider != settings.llm_provider, provider: Some(resolved.llm_provider), model }
+        }
+        None => LlmStatus { ready: false, provider: None, model: String::new(), fallback: false },
+    }
+}
+
+/// Starts every download a first song needs: the chosen YuE2 size, the VAE,
+/// the companion and, unless another language model is ready, the llama.cpp
+/// runtime with the chosen lyric model.
+#[tauri::command]
+async fn download_required(app: AppHandle) -> CommandResult<Vec<String>> {
+    let settings = app.state::<AppState>().settings();
+    let mut ids = vec![settings.backbone.clone(), "yue-vae".into(), "yue-companion".into()];
+    if jobs::resolve_llm(&app, &settings).await.is_none() {
+        ids.push("llama-runtime".into());
+        ids.push(settings.llm_model.clone());
+    }
+    let state = app.state::<AppState>();
+    let (models_dir, runtime_dir) = (state.models_dir(), state.runtime_dir());
+    let mut started = Vec::new();
+    for id in ids {
+        let Some(item) = catalog::find(&id) else { continue };
+        if !downloads::installed(&item, &models_dir, &runtime_dir) {
+            state.downloads.start(app.clone(), item, models_dir.clone(), runtime_dir.clone());
+            started.push(id);
+        }
+    }
+    Ok(started)
 }
 
 #[tauri::command]
@@ -301,8 +365,8 @@ async fn write_lyrics(app: AppHandle, request: jobs::SongRequest) -> CommandResu
 }
 
 #[tauri::command]
-fn cancel_job(app: AppHandle, id: String) {
-    jobs::cancel(&app, &id);
+fn cancel_job(app: AppHandle, id: String) -> Option<jobs::Job> {
+    jobs::cancel(&app, &id)
 }
 
 #[tauri::command]
@@ -390,7 +454,7 @@ pub fn run() {
             get_settings, save_settings, system_info,
             catalog, download_start, download_cancel, model_delete, storage_info, remove_all_models,
             engine_status, engine_start, engine_stop, engine_log, llm_test, ollama_models,
-            create_song, write_lyrics, cancel_job, list_jobs, dismiss_job,
+            create_song, write_lyrics, llm_status, download_required, cancel_job, list_jobs, dismiss_job,
             list_tracks, track_audio, update_track, delete_track, export_track, track_file_name, library_dir,
         ])
         .build(tauri::generate_context!())

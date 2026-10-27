@@ -92,6 +92,8 @@
     track_audio: () => wav(),
     engine_log: () => ["[Server] listening on 127.0.0.1:18087", "[Load] YuE2-3B-Q6_K.gguf on MTL0 (Apple M1 Pro)"],
     library_dir: () => "",
+    llm_status: () => ({ ready: true, provider: "builtin", model: "Gemma 4 E4B IT · QAT q4_0", fallback: false }),
+    download_required: () => [],
     storage_info: () => ({
       data_dir: "~/Library/Application Support/app.cadenza.studio",
       models_dir: "~/Library/Application Support/app.cadenza.studio/models",

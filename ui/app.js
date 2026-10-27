@@ -212,6 +212,13 @@ function formError(message) {
   const el = $("#formError");
   el.hidden = !message;
   el.textContent = message || "";
+  if (message && /Open Models/.test(message)) {
+    const go = document.createElement("button");
+    go.className = "btn ghost small";
+    go.textContent = "Open Models →";
+    go.addEventListener("click", () => show("models"));
+    el.append(go);
+  }
 }
 
 async function createSong(request) {
@@ -221,7 +228,7 @@ async function createSong(request) {
   if (!request.description && !request.lyrics.trim()) return formError("Describe the song you want.");
   try {
     const job = await invoke("create_song", { request });
-    upsertJob(job);
+    addJob(job);
     show("create");
   } catch (error) {
     formError(String(error));
@@ -257,6 +264,12 @@ $("#writeLyrics").addEventListener("click", async () => {
 });
 
 // -------------------------------------------------------------------- jobs
+
+// The job event for a new job can arrive before create_song returns; keep the
+// newer state rather than overwriting it with the "queued" snapshot.
+function addJob(job) {
+  if (!state.jobs.some((j) => j.id === job.id)) upsertJob(job);
+}
 
 function upsertJob(job) {
   const index = state.jobs.findIndex((j) => j.id === job.id);
@@ -403,7 +416,10 @@ document.addEventListener("click", (e) => {
   else if (d.save) saveTrack(d.save);
   else if (d.delete) deleteTrack(d.delete);
   else if (d.open) openDrawer(d.open);
-  else if (d.cancel) invoke("cancel_job", { id: d.cancel });
+  else if (d.cancel) invoke("cancel_job", { id: d.cancel }).then((job) => {
+    if (job) upsertJob(job);
+    else { state.jobs = state.jobs.filter((j) => j.id !== d.cancel); renderSession(); }
+  });
   else if (d.dismiss) {
     invoke("dismiss_job", { id: d.dismiss });
     state.jobs = state.jobs.filter((j) => j.id !== d.dismiss);
@@ -474,7 +490,7 @@ $("#drawerVariation").addEventListener("click", async () => {
   if (!t) return;
   try {
     const job = await invoke("create_song", { request: { description: t.description, parent_id: t.id, title: t.title, steps: Number(form.steps.value) } });
-    upsertJob(job);
+    addJob(job);
     closeDrawer();
     show("create");
     toast("Re-rendering with a new sound seed");
@@ -687,11 +703,13 @@ function renderChecklist() {
   const e = state.engine;
   if (!c || !s || !e) return;
   const installed = (id) => c.entries.some((x) => x.id === id && x.installed);
-  const llmReady = s.llm_provider !== "builtin" || (installed(s.llm_model) && installed("llama-runtime"));
+  const llm = state.llm || {};
+  const llmReady = !!llm.ready;
+  const llmText = llm.ready ? `Language model: ${llm.provider === "builtin" ? "built-in" : llm.provider === "ollama" ? "Ollama" : "OpenAI-compatible"}${llm.model ? ` (${llm.model})` : ""}` : "Language model ready (writes lyrics)";
   const items = [
     { done: !!e.executable, text: "Music engine (yue-server) is built", hint: e.executable ? "" : "Run scripts/build-engine.sh", goto: "settings" },
-    { done: installed(s.backbone) && installed("yue-vae"), text: "YuE2 music model downloaded", goto: "models" },
-    { done: llmReady, text: s.llm_provider === "builtin" ? "Language model downloaded (writes lyrics)" : `Language model: ${s.llm_provider === "ollama" ? "Ollama" : "OpenAI-compatible"}`, goto: s.llm_provider === "builtin" ? "models" : "settings" },
+    { done: installed(s.backbone) && installed("yue-vae") && (!s.use_companion || installed("yue-companion")), text: "YuE2 music model, VAE and companion downloaded", goto: "models" },
+    { done: llmReady, text: llmText, goto: "models" },
   ];
   const allDone = items.every((i) => i.done);
   $("#setupCard").hidden = allDone;
@@ -733,7 +751,7 @@ $("#enginePill").addEventListener("click", () => show(state.engine && state.engi
 const progress = {};
 
 async function refreshCatalog() {
-  state.catalog = await invoke("catalog");
+  [state.catalog, state.llm] = await Promise.all([invoke("catalog"), invoke("llm_status").catch(() => null)]);
   for (const p of state.catalog.progress) if (p.state === "running" || p.state === "verifying") progress[p.id] = p;
   renderModels();
   renderChecklist();
@@ -782,7 +800,43 @@ function renderModels() {
   $("#modelsCovers").innerHTML = by(["transcriber", "transcriber_base"]).map((e) => modelRow(e, { selectable: false })).join("");
   const free = c.free_bytes != null ? ` · ${fmtBytes(c.free_bytes)} free` : "";
   $("#modelsMeta").textContent = `${c.models_dir}${free}`;
+  renderNeeded();
 }
+
+// Everything a first song needs, in one button.
+function renderNeeded() {
+  const c = state.catalog;
+  const s = state.settings;
+  const llm = state.llm || {};
+  const ids = [s.backbone, "yue-vae", "yue-companion"];
+  if (!llm.ready) ids.push("llama-runtime", s.llm_model);
+  const missing = ids.map((id) => c.entries.find((e) => e.id === id)).filter((e) => e && !e.installed);
+  const busy = missing.filter((e) => e.downloading || (progress[e.id] && ["running", "verifying"].includes(progress[e.id].state)));
+  const banner = $("#needBanner");
+  banner.hidden = missing.length === 0;
+  if (!missing.length) return;
+  const bytes = missing.reduce((n, e) => n + Math.max(0, e.bytes - (e.partial || 0)), 0);
+  $("#needTitle").textContent = busy.length === missing.length ? "Downloading what's needed…" : "A few downloads before your first song";
+  const via = llm.ready && llm.provider !== "builtin" ? ` Lyrics will come from ${llm.provider === "ollama" ? "Ollama" : "your server"}${llm.model ? ` (${llm.model})` : ""}.` : "";
+  $("#needText").textContent = `Missing: ${missing.map((e) => e.label).join(", ")}.${via}`;
+  const button = $("#downloadRequired");
+  button.disabled = busy.length === missing.length;
+  button.textContent = bytes ? `Download what's needed (${fmtBytes(bytes)})` : "Download what's needed";
+}
+
+$("#downloadRequired").addEventListener("click", async () => {
+  try {
+    const started = await invoke("download_required");
+    for (const id of started) {
+      const entry = state.catalog.entries.find((x) => x.id === id);
+      if (entry) progress[id] = { id, state: "running", downloaded: entry.partial, total: entry.bytes, bytes_per_sec: 0 };
+    }
+    toast(started.length ? `Downloading ${started.length} file${started.length > 1 ? "s" : ""}` : "Everything is already downloading");
+  } catch (err) {
+    toast(String(err), true);
+  }
+  refreshCatalog();
+});
 
 $("#view-models").addEventListener("click", async (e) => {
   const t = e.target.closest("[data-dl-start],[data-dl-cancel],[data-dl-delete],[data-select]");

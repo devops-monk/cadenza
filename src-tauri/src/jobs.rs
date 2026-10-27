@@ -159,12 +159,25 @@ pub fn submit(app: AppHandle, request: SongRequest) -> Job {
     job
 }
 
-pub fn cancel(app: &AppHandle, id: &str) {
+/// Flags the job and answers with its state as it now stands, so the UI never
+/// keeps a stale card: a queued job is cancelled on the spot, a running one
+/// stops at its next poll, a finished one is returned as it is.
+pub fn cancel(app: &AppHandle, id: &str) -> Option<Job> {
     let state = app.state::<AppState>();
     let flag = state.cancels.lock().unwrap().get(id).cloned();
     if let Some(flag) = flag {
         flag.store(true, Ordering::SeqCst);
     }
+    update(app, id, |job| match job.state.as_str() {
+        "queued" => {
+            job.state = "cancelled".into();
+            job.stage = "Cancelled".into();
+        }
+        "running" => job.detail = "Cancelling…".into(),
+        _ => {}
+    });
+    let job = state.jobs.lock().unwrap().iter().find(|job| job.id == id).cloned();
+    job
 }
 
 fn check(cancel: &AtomicBool) -> Result<()> {
@@ -174,16 +187,42 @@ fn check(cancel: &AtomicBool) -> Result<()> {
     Ok(())
 }
 
-/// Whether some language model is configured and reachable enough to try.
-fn llm_configured(app: &AppHandle, settings: &Settings) -> bool {
+/// Runs a step that has no cancel point of its own (a model loading, a
+/// language model writing) and abandons it as soon as the job is cancelled.
+async fn cancellable<T>(cancel: &AtomicBool, step: impl std::future::Future<Output = Result<T>>) -> Result<T> {
+    let watch = async {
+        while !cancel.load(Ordering::SeqCst) {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    };
+    tokio::select! {
+        result = step => result,
+        _ = watch => bail!("cancelled"),
+    }
+}
+
+/// The language-model settings a job can use right now: the configured
+/// provider, or Ollama when the built-in model is not downloaded but Ollama
+/// is running with a model pulled - nothing to download in that case.
+pub async fn resolve_llm(app: &AppHandle, settings: &Settings) -> Option<Settings> {
     match settings.llm_provider {
         LlmProvider::Builtin => {
             let state = app.state::<AppState>();
-            crate::llm::builtin_model_path(settings, &state.models_dir()).is_ok() && crate::llm::find_llama_server(&state.runtime_dir()).is_some()
+            if crate::llm::builtin_model_path(settings, &state.models_dir()).is_ok() && crate::llm::find_llama_server(&state.runtime_dir()).is_some() {
+                return Some(settings.clone());
+            }
+            let models = crate::llm::ollama_models(&settings.ollama_url).await.ok()?;
+            let model = models.iter().find(|name| **name == settings.ollama_model).or(models.first())?.clone();
+            Some(Settings { llm_provider: LlmProvider::Ollama, ollama_model: model, ..settings.clone() })
         }
-        LlmProvider::Ollama => !settings.ollama_model.trim().is_empty(),
-        LlmProvider::OpenAi => !settings.openai_url.trim().is_empty(),
+        LlmProvider::Ollama => (!settings.ollama_model.trim().is_empty()).then(|| settings.clone()),
+        LlmProvider::OpenAi => (!settings.openai_url.trim().is_empty()).then(|| settings.clone()),
     }
+}
+
+/// Lyrics are written by a model unless the request brings them.
+pub fn needs_writer(request: &SongRequest) -> bool {
+    request.parent_id.is_none() && !request.instrumental && request.lyrics.trim().is_empty()
 }
 
 pub async fn ensure_llm(app: &AppHandle, settings: &Settings) -> Result<()> {
@@ -254,10 +293,9 @@ async fn run(app: &AppHandle, id: &str, request: SongRequest, cancel: &AtomicBoo
             style: request.style.trim().into(),
             lyrics: if request.instrumental { songwriter::INSTRUMENTAL_LYRICS.into() } else { songwriter::tidy_lyrics(&request.lyrics) },
         }
-    } else if llm_configured(app, &settings) {
+    } else if let Some(llm_settings) = resolve_llm(app, &settings).await {
         stage(app, id, "Writing lyrics", "Loading the language model");
-        ensure_llm(app, &settings).await?;
-        check(cancel)?;
+        cancellable(cancel, ensure_llm(app, &llm_settings)).await?;
         stage(app, id, "Writing lyrics", "Choosing words, title and sound");
         let brief = Brief {
             description: &request.description,
@@ -267,7 +305,7 @@ async fn run(app: &AppHandle, id: &str, request: SongRequest, cancel: &AtomicBoo
             instrumental: request.instrumental,
             duration: request.duration,
         };
-        let mut written = songwriter::write(&settings, &brief).await?;
+        let mut written = cancellable(cancel, songwriter::write(&llm_settings, &brief)).await?;
         if has_style {
             written.style = request.style.trim().into();
         }
@@ -291,8 +329,7 @@ async fn run(app: &AppHandle, id: &str, request: SongRequest, cancel: &AtomicBoo
 
     // 2. Engine.
     stage(app, id, "Starting the music engine", "Loading YuE2 into memory");
-    ensure_engine(app).await?;
-    check(cancel)?;
+    cancellable(cancel, ensure_engine(app)).await?;
 
     // 3. Covers: hear the melody first.
     let mut abc = String::new();
@@ -339,7 +376,7 @@ async fn sing(app: &AppHandle, id: &str, settings: &Settings, body: Value, writt
     let state = app.state::<AppState>();
     if parent_id.is_some() {
         stage(app, id, "Starting the music engine", "Loading YuE2 into memory");
-        ensure_engine(app).await?;
+        cancellable(cancel, ensure_engine(app)).await?;
     }
     stage(app, id, if parent_id.is_some() { "Re-rendering" } else { "Composing & singing" }, "Writing the score, then the audio codes");
     let job = state.client.submit(&body).await?;
@@ -388,10 +425,9 @@ async fn sing(app: &AppHandle, id: &str, settings: &Settings, body: Value, writt
 /// Lyrics (and a style) for the form, without making the song.
 pub async fn write_only(app: &AppHandle, request: SongRequest) -> Result<Written> {
     let state = app.state::<AppState>();
-    let settings = state.settings();
-    if !llm_configured(app, &settings) {
-        bail!("download a language model (Models) or connect Ollama (Settings) first");
-    }
+    let Some(settings) = resolve_llm(app, &state.settings()).await else {
+        bail!("download a language model (Models) or start Ollama first");
+    };
     let _turn = state.pipeline.lock().await;
     ensure_llm(app, &settings).await?;
     let brief = Brief {
