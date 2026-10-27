@@ -60,11 +60,20 @@ pub struct SongRequest {
     pub variations: u32,
     #[serde(default)]
     pub temperature: Option<f32>,
-    /// Covers: the recording whose melody is sung.
+    /// Remakes: the recording the new version is made from.
     #[serde(default)]
     pub cover_audio: Option<String>,
+    /// "cover": its melody sung again in a new style and words.
+    /// "continue": the new song starts with a section of it and goes on.
+    #[serde(default = "default_remake")]
+    pub remake: String,
     #[serde(default)]
     pub melody_only: bool,
+    /// The section a "continue" remake starts with, in seconds; -1 is the end.
+    #[serde(default)]
+    pub source_start: f32,
+    #[serde(default = "minus_one")]
+    pub source_end: f32,
     /// Variations: the track whose composition is re-rendered.
     #[serde(default)]
     pub parent_id: Option<String>,
@@ -74,6 +83,26 @@ fn default_duration() -> f32 { 180.0 }
 fn default_cot() -> String { "full".into() }
 fn default_steps() -> u32 { 32 }
 fn one() -> u32 { 1 }
+fn default_remake() -> String { "cover".into() }
+fn minus_one() -> f32 { -1.0 }
+
+impl SongRequest {
+    pub fn continues(&self) -> bool {
+        self.cover_audio.is_some() && self.remake == "continue"
+    }
+
+    fn kind(&self) -> &'static str {
+        if self.parent_id.is_some() {
+            "variation"
+        } else if self.continues() {
+            "remix"
+        } else if self.cover_audio.is_some() {
+            "cover"
+        } else {
+            "song"
+        }
+    }
+}
 
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
@@ -101,13 +130,7 @@ fn stage(app: &AppHandle, id: &str, stage: &str, detail: &str) {
 }
 
 pub fn submit(app: AppHandle, request: SongRequest) -> Job {
-    let kind = if request.parent_id.is_some() {
-        "variation"
-    } else if request.cover_audio.is_some() {
-        "cover"
-    } else {
-        "song"
-    };
+    let kind = request.kind();
     let job = Job {
         id: uuid::Uuid::new_v4().to_string(),
         kind: kind.into(),
@@ -331,27 +354,39 @@ async fn run(app: &AppHandle, id: &str, request: SongRequest, cancel: &AtomicBoo
     stage(app, id, "Starting the music engine", "Loading YuE2 into memory");
     cancellable(cancel, ensure_engine(app)).await?;
 
-    // 3. Covers: hear the melody first.
+    // 3. Remakes: hear the recording first.
     let mut abc = String::new();
+    let mut source_tokens = String::new();
     if let Some(path) = &request.cover_audio {
-        let covers = state.engine.lock().unwrap().status(&settings, &state.models_dir(), None).covers;
-        if !covers {
-            bail!("covers need the SheetSage2 transcriber and the MERT encoder (Models → Covers)");
+        let missing = crate::engine::remake_missing(&state.models_dir(), &request.remake);
+        if !missing.is_empty() {
+            bail!("remakes need the {} (Models → Remakes)", missing.iter().filter_map(|id| crate::catalog::find(id)).map(|item| item.label).collect::<Vec<_>>().join(" and "));
         }
-        stage(app, id, "Listening to the recording", "Transcribing its melody");
-        let audio = tokio::fs::read(path).await.with_context(|| format!("could not read {path}"))?;
-        let filename = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "song.mp3".into());
-        let job = state.client.transcribe(audio, filename, request.melody_only).await?;
+        stage(app, id, "Listening to the recording", "Reading the audio");
+        let path = std::path::PathBuf::from(path);
+        let (audio, filename) = tokio::task::spawn_blocking(move || crate::audio::for_engine(&path)).await??;
+        check(cancel)?;
+        let job = if request.continues() {
+            stage(app, id, "Listening to the recording", "Turning it into the codes YuE2 sings");
+            state.client.tokenize(audio, filename).await?
+        } else {
+            stage(app, id, "Listening to the recording", "Transcribing its melody");
+            state.client.transcribe(audio, filename, request.melody_only).await?
+        };
         if !state.client.wait(&job, || cancel.load(Ordering::SeqCst)).await? {
             bail!("cancelled");
         }
-        abc = state.client.score(&job).await?;
+        if request.continues() {
+            source_tokens = state.client.codes(&job).await?;
+        } else {
+            abc = state.client.score(&job).await?;
+        }
     }
 
     let mut body = json!({
         "style": written.style,
         "lyrics": written.lyrics,
-        "cot": if request.cover_audio.is_some() { if request.melody_only { "melody" } else { "full" } } else { request.cot.as_str() },
+        "cot": if request.cover_audio.is_some() && !request.continues() { if request.melody_only { "melody" } else { "full" } } else { request.cot.as_str() },
         "duration": request.duration.clamp(10.0, 600.0),
         "steps": request.steps.clamp(1, 200),
         "lm_seed": request.lm_seed.unwrap_or_else(random_seed),
@@ -364,10 +399,21 @@ async fn run(app: &AppHandle, id: &str, request: SongRequest, cancel: &AtomicBoo
     if !abc.is_empty() {
         body["abc"] = json!(abc);
     }
+    if !source_tokens.is_empty() {
+        let start = request.source_start.max(0.0);
+        let end = if request.source_end > start { request.source_end } else { -1.0 };
+        body["source_tokens"] = json!(source_tokens);
+        body["source_start"] = json!(start);
+        body["source_end"] = json!(end);
+        // The new song must outlast the section it starts with.
+        if end > 0.0 {
+            body["duration"] = json!(request.duration.clamp(10.0, 600.0).max(end - start + 20.0).min(600.0));
+        }
+    }
     if let Some(temperature) = request.temperature {
         body["semantic_sampling"] = json!({ "temperature": temperature.clamp(0.1, 2.0) });
     }
-    let kind = if request.cover_audio.is_some() { "cover" } else { "song" };
+    let kind = request.kind();
     sing(app, id, &settings, body, &written, &request, kind, None, cancel).await
 }
 

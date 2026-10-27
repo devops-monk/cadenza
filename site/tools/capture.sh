@@ -29,6 +29,7 @@ shot() {
 }
 shot create app-create
 shot create,dark app-create-dark
+shot remake app-remake
 shot library app-library
 shot drawer app-lyrics
 shot models app-models

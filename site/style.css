@@ -127,6 +127,10 @@ h4 { font-size: 19px; margin: 0 0 6px; letter-spacing: -.02em; }
 .step-num { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--grad); color: #fff; font-weight: 700; margin-bottom: 18px; }
 .step h3 { font-size: 34px; }
 .step p { color: var(--muted); font-size: 19px; }
+.remake-modes { list-style: none; padding: 0; margin: 18px 0; display: grid; gap: 14px; }
+.remake-modes li { color: var(--muted); font-size: 17px; padding-left: 18px; border-left: 3px solid; border-image: var(--grad) 1; }
+.remake-modes b { color: var(--text); }
+.small-note { font-size: 15px !important; }
 .shot { border-radius: 16px; overflow: hidden; box-shadow: 0 30px 70px -20px rgba(30, 20, 60, .3), 0 0 0 1px rgba(0, 0, 0, .06); }
 
 /* ------------------------------------------------------------- pipeline */

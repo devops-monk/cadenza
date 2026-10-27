@@ -29,7 +29,10 @@ pub struct EngineStatus {
     pub executable: Option<String>,
     pub backbone: String,
     pub missing: Vec<String>,
+    /// "Same melody" remakes: the transcriber pair is installed.
     pub covers: bool,
+    /// "Continue from a section" remakes: the tokenizer pair is installed.
+    pub remix: bool,
     pub message: Option<String>,
 }
 
@@ -53,6 +56,31 @@ pub struct ModelFiles {
     pub vae: PathBuf,
     pub companion: Option<PathBuf>,
     pub transcriber: Option<PathBuf>,
+    pub tokenizer: Option<PathBuf>,
+}
+
+/// The first installed head of these pairs whose MERT encoder sits beside it.
+fn installed_head(models_dir: &Path, pairs: [(&str, &str); 2]) -> Option<PathBuf> {
+    pairs.into_iter().find_map(|(head, base)| {
+        let head = catalog::find(head)?;
+        let base = catalog::find(base)?;
+        let head_path = models_dir.join(head.filename);
+        (head_path.is_file() && models_dir.join(base.filename).is_file()).then_some(head_path)
+    })
+}
+
+/// Ids still to download before a remake in this mode ("cover" or
+/// "continue") can run; empty when one pair is complete.
+pub fn remake_missing(models_dir: &Path, mode: &str) -> Vec<&'static str> {
+    let pairs = catalog::remake_pairs(mode);
+    if installed_head(models_dir, pairs).is_some() {
+        return Vec::new();
+    }
+    let (head, base) = pairs[0];
+    [head, base]
+        .into_iter()
+        .filter(|id| catalog::find(id).is_some_and(|item| !models_dir.join(item.filename).is_file()))
+        .collect()
 }
 
 pub fn model_files(settings: &Settings, models_dir: &Path) -> std::result::Result<ModelFiles, Vec<String>> {
@@ -74,15 +102,11 @@ pub fn model_files(settings: &Settings, models_dir: &Path) -> std::result::Resul
     } else {
         None
     };
-    // The transcriber reads the MERT encoder from its own folder.
-    let transcriber = catalog::transcriber_pairs().into_iter().find_map(|(head, base)| {
-        let head = catalog::find(head)?;
-        let base = catalog::find(base)?;
-        let head_path = models_dir.join(head.filename);
-        (head_path.is_file() && models_dir.join(base.filename).is_file()).then_some(head_path)
-    });
+    // Both heads read the MERT encoder from their own folder.
+    let transcriber = installed_head(models_dir, catalog::transcriber_pairs());
+    let tokenizer = installed_head(models_dir, catalog::tokenizer_pairs());
     match (backbone, vae) {
-        (Some(backbone), Some(vae)) if missing.is_empty() => Ok(ModelFiles { backbone, vae, companion, transcriber }),
+        (Some(backbone), Some(vae)) if missing.is_empty() => Ok(ModelFiles { backbone, vae, companion, transcriber, tokenizer }),
         _ => Err(missing),
     }
 }
@@ -131,9 +155,9 @@ impl Engine {
         } else {
             "stopped"
         };
-        let (missing, covers) = match &files {
-            Ok(files) => (Vec::new(), files.transcriber.is_some()),
-            Err(missing) => (missing.clone(), false),
+        let (missing, covers, remix) = match &files {
+            Ok(files) => (Vec::new(), files.transcriber.is_some(), files.tokenizer.is_some()),
+            Err(missing) => (missing.clone(), false, false),
         };
         EngineStatus {
             state,
@@ -141,6 +165,7 @@ impl Engine {
             backbone: settings.backbone.clone(),
             missing,
             covers,
+            remix,
             message: self.last_error.clone(),
         }
     }
@@ -148,7 +173,9 @@ impl Engine {
     /// Launches the process if it is not already running with these settings.
     /// Returns true when the caller must wait for it to become healthy.
     pub fn spawn(&mut self, app: &AppHandle, settings: &Settings, models_dir: &Path, executable: &Path) -> Result<bool> {
-        let fingerprint = settings.engine_fingerprint();
+        // Optional heads are flags at start, so a newly downloaded one restarts it.
+        let optional = model_files(settings, models_dir).map(|files| format!("{:?}|{:?}", files.transcriber, files.tokenizer)).unwrap_or_default();
+        let fingerprint = format!("{}|{optional}", settings.engine_fingerprint());
         if self.running() {
             if self.fingerprint == fingerprint {
                 return Ok(self.starting);
@@ -166,6 +193,9 @@ impl Engine {
         }
         if let Some(transcriber) = &files.transcriber {
             command.arg("--transcriber").arg(transcriber);
+        }
+        if let Some(tokenizer) = &files.tokenizer {
+            command.arg("--tokenizer").arg(tokenizer);
         }
         if settings.keep_loaded {
             command.arg("--keep-loaded");
@@ -337,6 +367,12 @@ impl Client {
         Ok(Self::json::<Submitted>(response).await?.id)
     }
 
+    pub async fn tokenize(&self, audio: Vec<u8>, filename: String) -> Result<String> {
+        let form = reqwest::multipart::Form::new().part("audio", reqwest::multipart::Part::bytes(audio).file_name(filename));
+        let response = self.http.post(format!("{}/tokenize", self.base)).multipart(form).send().await?;
+        Ok(Self::json::<Submitted>(response).await?.id)
+    }
+
     pub async fn status(&self, id: &str) -> Result<String> {
         let response = self.http.get(format!("{}/job", self.base)).query(&[("id", id)]).send().await?;
         Ok(Self::json::<JobState>(response).await?.status)
@@ -410,6 +446,12 @@ impl Client {
         let value: Value = serde_json::from_slice(&body)?;
         value.get("abc").and_then(Value::as_str).map(str::to_owned).context("the transcriber returned no score")
     }
+
+    pub async fn codes(&self, id: &str) -> Result<String> {
+        let (_, body) = self.result_raw(id).await?;
+        let value: Value = serde_json::from_slice(&body)?;
+        value.get("codes").and_then(Value::as_str).filter(|codes| !codes.is_empty()).map(str::to_owned).context("the tokenizer returned no codes")
+    }
 }
 
 fn boundary_of(content_type: &str) -> Option<String> {
@@ -458,6 +500,23 @@ fn split_multipart<'a>(body: &'a [u8], boundary: &str) -> Vec<(String, &'a [u8])
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remake_needs_a_complete_pair() {
+        let dir = std::env::temp_dir().join(format!("cadenza-remake-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let touch = |id: &str| std::fs::write(dir.join(catalog::find(id).unwrap().filename), b"").unwrap();
+        assert_eq!(remake_missing(&dir, "continue"), vec!["tokenizer-q8", "mert-q8"]);
+        touch("mert-q8");
+        assert_eq!(remake_missing(&dir, "continue"), vec!["tokenizer-q8"]);
+        assert_eq!(remake_missing(&dir, "cover"), vec!["sheetsage-q8"]);
+        touch("tokenizer-q8");
+        assert!(remake_missing(&dir, "continue").is_empty());
+        // An F32 head does not pair with the Q8 encoder.
+        touch("sheetsage-f32");
+        assert_eq!(remake_missing(&dir, "cover"), vec!["sheetsage-q8"]);
+        std::fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn splits_a_two_track_result() {

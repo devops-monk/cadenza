@@ -23,7 +23,10 @@ computer, and you can make as many songs as you like.
 
 - **Song**: a description is enough. Lyrics, the instrumental toggle, the title and every engine setting are optional.
 - **✦ Write lyrics**: fills the lyrics, title and style from the description so you can edit them before making the song.
-- **Song Cover**: SheetSage2 transcribes a recording's melody, and YuE2 sings it in a new style.
+- **Remake a Song**: drop in an MP3, WAV, FLAC, M4A, OGG or AIFF and get a new version of it:
+  - *Same melody, new style*: SheetSage2 transcribes the melody to a score and YuE2 sings it again in the style you describe.
+  - *Continue from a section*: the realaudio tokenizer turns a section you pick into YuE2's codes, and the new song opens with it and carries on.
+  - Lyrics are optional; the language model writes new ones when left empty.
 - **Variations**: re-renders a finished song's composition with a new sound seed, without composing it again.
 - **Library**: search, favourites, rename, Save as…, lyrics / style / score / prompt for every track, reuse a prompt.
 - **Player**: waveform seek, previous / next, repeat, volume, favourite, save.
@@ -39,6 +42,8 @@ computer, and you can make as many songs as you like.
 | **Home**: type an idea and press Create | **Every song keeps its recipe**: lyrics, style, score, prompt |
 | <img src="site/images/app-library.png" alt="Library with search and favourites" /> | <img src="site/images/app-models.png" alt="Models page with every size and a download in progress" /> |
 | **Library**: search, favourites, Save as… | **Models**: every size, recommended for your machine |
+| <img src="site/images/app-remake.png" alt="Remake a Song: a recording, two modes, a section picker" /> | <img src="site/images/app-create.png" alt="Create: a song being composed" /> |
+| **Remake a Song**: a new version of any recording | **Create**: describe it and watch it being made |
 | <img src="site/images/app-create-dark.png" alt="Create screen in dark mode" /> | <img src="site/images/app-settings.png" alt="Settings: built-in llama.cpp, Ollama or any OpenAI-compatible server" /> |
 | **Dark mode** | **Settings**: built-in model, Ollama or any server |
 

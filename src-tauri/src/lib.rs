@@ -1,5 +1,6 @@
 //! Cadenza: prompt to full song, generated on your own machine.
 
+mod audio;
 mod catalog;
 mod downloads;
 mod engine;
@@ -153,6 +154,7 @@ fn download_start(app: AppHandle, state: State<AppState>, id: String) -> Command
         catalog::Kind::Backbone => ids.extend(["yue-vae".to_string(), "yue-companion".to_string()]),
         catalog::Kind::Llm => ids.push("llama-runtime".into()),
         catalog::Kind::Transcriber => ids.extend(catalog::transcriber_pairs().iter().filter(|(t, _)| *t == id).map(|(_, base)| base.to_string())),
+        catalog::Kind::Tokenizer => ids.extend(catalog::tokenizer_pairs().iter().filter(|(t, _)| *t == id).map(|(_, base)| base.to_string())),
         _ => {}
     }
     let (models_dir, runtime_dir) = (state.models_dir(), state.runtime_dir());
@@ -317,10 +319,40 @@ async fn create_song(app: AppHandle, request: jobs::SongRequest) -> CommandResul
     if let Err(missing) = engine::model_files(&settings, &models_dir) {
         return Err(format!("Still needed before making music: {}. Open Models and press “Download what's needed”.", missing.join(", ")));
     }
+    if let Some(path) = &request.cover_audio {
+        if !std::path::Path::new(path).is_file() {
+            return Err("The recording is gone. Choose it again.".into());
+        }
+        let missing = engine::remake_missing(&models_dir, &request.remake);
+        if !missing.is_empty() {
+            let labels: Vec<_> = missing.iter().filter_map(|id| catalog::find(id)).map(|item| item.label).collect();
+            return Err(format!("Remakes need the {}. Press “Download what's needed” below, or open Models.", labels.join(" and ")));
+        }
+    }
     if jobs::needs_writer(&request) && jobs::resolve_llm(&app, &settings).await.is_none() {
         return Err("Nothing can write the lyrics yet. Open Models and press “Download what's needed”, start Ollama, or paste your own lyrics.".into());
     }
     Ok(jobs::submit(app, request))
+}
+
+/// Name and length of a recording to remake, read before it is submitted.
+#[tauri::command]
+async fn audio_info(app: AppHandle, path: String) -> CommandResult<serde_json::Value> {
+    let models_dir = app.state::<AppState>().models_dir();
+    let info = tokio::task::spawn_blocking(move || audio::info(std::path::Path::new(&path))).await.map_err(err)?.map_err(err)?;
+    Ok(serde_json::json!({
+        "name": info.name,
+        "duration": info.duration,
+        "missing": {
+            "cover": engine::remake_missing(&models_dir, "cover"),
+            "continue": engine::remake_missing(&models_dir, "continue"),
+        },
+    }))
+}
+
+#[tauri::command]
+fn audio_extensions() -> Vec<&'static str> {
+    audio::EXTENSIONS.to_vec()
 }
 
 #[derive(Serialize)]
@@ -352,10 +384,14 @@ async fn llm_status(app: AppHandle) -> LlmStatus {
 /// Starts every download a first song needs: the chosen YuE2 size, the VAE,
 /// the companion and, unless another language model is ready, the llama.cpp
 /// runtime with the chosen lyric model.
+/// With `remake` ("cover" or "continue"), also the models that remake needs.
 #[tauri::command]
-async fn download_required(app: AppHandle) -> CommandResult<Vec<String>> {
+async fn download_required(app: AppHandle, remake: Option<String>) -> CommandResult<Vec<String>> {
     let settings = app.state::<AppState>().settings();
     let mut ids = vec![settings.backbone.clone(), "yue-vae".into(), "yue-companion".into()];
+    if let Some(mode) = &remake {
+        ids.extend(engine::remake_missing(&app.state::<AppState>().models_dir(), mode).into_iter().map(String::from));
+    }
     if jobs::resolve_llm(&app, &settings).await.is_none() {
         ids.push("llama-runtime".into());
         ids.push(settings.llm_model.clone());
@@ -471,7 +507,7 @@ pub fn run() {
             get_settings, save_settings, system_info,
             catalog, download_start, download_cancel, model_delete, storage_info, remove_all_models,
             engine_status, engine_start, engine_stop, engine_log, llm_test, ollama_models,
-            create_song, write_lyrics, llm_status, download_required, cancel_job, list_jobs, dismiss_job,
+            create_song, write_lyrics, llm_status, download_required, audio_info, audio_extensions, cancel_job, list_jobs, dismiss_job,
             list_tracks, track_audio, update_track, delete_track, export_track, track_file_name, library_dir,
         ])
         .build(tauri::generate_context!())

@@ -30,6 +30,9 @@
   const jobs = scene === "create" ? [{
     id: "job-1", kind: "song", title: "Sunday Pancake Song", description: "", state: "running",
     stage: "Composing & singing", detail: "semantic stage: 1840/4375 frames · 41 tok/s", started_at: now - 83000, error: null, track_ids: [],
+  }] : scene === "remake" ? [{
+    id: "job-2", kind: "remix", title: "Monsoon Demo, Lo-fi", description: "", state: "running",
+    stage: "Listening to the recording", detail: "Turning it into the codes YuE2 sings", started_at: now - 21000, error: null, track_ids: [],
   }] : [];
 
   const gb = (n) => Math.round(n * 1024 ** 3);
@@ -53,9 +56,12 @@
       entry("gemma-12b-q5", "llm", "Gemma 4 12B IT · Q5_K_M", gb(7.84), 32, "More accurate than q4_0.", false),
       entry("gemma-12b-q8", "llm", "Gemma 4 12B IT · Q8_0", gb(11.8), 48, "As close to the original as a quantisation gets.", false),
       entry("sheetsage-q8", "transcriber", "SheetSage2 transcriber · Q8_0", gb(0.1), 0, "Listens to a recording and writes its melody as a score.", false),
-      entry("mert-q8", "transcriber_base", "MERT-v2 audio encoder · Q8_0", gb(0.84), 0, "The encoder the transcriber reads.", false),
+      entry("mert-q8", "transcriber_base", "MERT-v2 audio encoder · Q8_0", gb(0.84), 0, "The audio encoder every remake listens with.", false),
+      entry("tokenizer-q8", "tokenizer", "Realaudio tokenizer v9 · Q8_0", gb(0.043), 0, "Turns a recording into the codes YuE2 sings.", false),
     ],
   };
+  // The remake screenshot shows a set-up machine.
+  if (scene === "remake") for (const e of catalog.entries) if (["tokenizer-q8", "mert-q8", "sheetsage-q8"].includes(e.id)) e.installed = true;
   const settings = {
     models_dir: "", backbone: "yue-q6", llm_provider: "builtin", llm_model: "gemma-e4b-q4",
     ollama_url: "http://127.0.0.1:11434", ollama_model: "qwen3:32b", openai_url: "", openai_model: "", openai_key: "",
@@ -92,6 +98,7 @@
     track_audio: () => wav(),
     engine_log: () => ["[Server] listening on 127.0.0.1:18087", "[Load] YuE2-3B-Q6_K.gguf on MTL0 (Apple M1 Pro)"],
     library_dir: () => "",
+    audio_info: () => ({ name: "Monsoon Demo.m4a", duration: 214.6, missing: { cover: ["sheetsage-q8", "mert-q8"], continue: ["tokenizer-q8", "mert-q8"] } }),
     llm_status: () => ({ ready: true, provider: "builtin", model: "Gemma 4 E4B IT · QAT q4_0", fallback: false }),
     download_required: () => [],
     storage_info: () => ({
@@ -103,15 +110,25 @@
     }),
   };
 
+  const listeners = {};
+  const emit = (name, payload) => (listeners[name] || []).forEach((fn) => fn({ payload }));
   window.__TAURI__ = {
     core: { invoke: async (cmd) => (handlers[cmd] ? handlers[cmd]() : null) },
-    event: { listen: async () => () => {} },
+    event: { listen: async (name, fn) => { (listeners[name] ||= []).push(fn); return () => {}; } },
   };
 
   // Stage the scene once the app has booted.
   window.addEventListener("load", () => setTimeout(async () => {
     const click = (sel) => document.querySelector(sel)?.click();
-    if (scene !== "create") click(`.nav button[data-view="${scene === "drawer" ? "library" : scene}"]`);
+    if (scene !== "create" && scene !== "remake") click(`.nav button[data-view="${scene === "drawer" ? "library" : scene}"]`);
+    if (scene === "remake") {
+      emit("tauri://drag-drop", { paths: ["/Users/me/Music/Monsoon Demo.m4a"] });
+      setTimeout(() => {
+        click('#remakeSeg [data-remake="continue"]');
+        document.querySelector("#description").value = "lo-fi acoustic version with a soft male vocal and fingerpicked guitar";
+        document.querySelector("#description").dispatchEvent(new Event("input"));
+      }, 200);
+    }
     if (scene === "create") {
       document.querySelector("#description").value = tracks[0].description;
       document.querySelector("#description").dispatchEvent(new Event("input"));

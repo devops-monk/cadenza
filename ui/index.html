@@ -66,7 +66,7 @@
           <div class="create-form">
             <div class="tabs" role="tablist">
               <button class="tab active" data-tab="song">Song</button>
-              <button class="tab" data-tab="cover">Song Cover</button>
+              <button class="tab" data-tab="cover">Remake a Song</button>
             </div>
             <p class="muted small" id="tabHint">Write a prompt, and lyrics if you like. Get a song of your own.</p>
 
@@ -74,10 +74,27 @@
               <div class="label-row"><label>Recording</label><span class="req">Required</span></div>
               <button class="file-pick" id="coverPick">
                 <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-                <span id="coverName">Choose an MP3 or WAV…</span>
+                <span><span id="coverName">Choose or drop a song — MP3, WAV, FLAC, M4A, OGG…</span><span class="file-meta" id="coverMeta"></span></span>
               </button>
-              <label class="check"><input type="checkbox" id="melodyOnly" /> Melody only (ignore the chords)</label>
-              <p class="hint">The melody is transcribed to a score and sung again in your style. The original lyrics fit best.</p>
+              <div class="seg wide remake-seg" id="remakeSeg">
+                <button data-remake="cover" class="active">Same melody, new style</button>
+                <button data-remake="continue">Continue from a section</button>
+              </div>
+              <div class="remake-cover">
+                <label class="check"><input type="checkbox" id="melodyOnly" /> Melody only (ignore the chords)</label>
+                <p class="hint">Its melody is written down as a score and sung again in your style. Leave the lyrics empty to have new words written; the original lyrics fit the melody best.</p>
+              </div>
+              <div class="remake-continue" hidden>
+                <div class="grid2 section-pick">
+                  <div class="field"><label for="sourceStart">Start at <span class="value" id="sourceStartValue">0:00</span></label><input id="sourceStart" type="range" min="0" max="60" step="1" value="0" /></div>
+                  <div class="field"><label for="sourceEnd">Until <span class="value" id="sourceEndValue">0:30</span></label><input id="sourceEnd" type="range" min="1" max="60" step="1" value="30" /></div>
+                </div>
+                <p class="hint">The new song opens with this part of your recording, then carries on in the style and words you give. 10–40 seconds works best.</p>
+              </div>
+              <div class="remake-need" id="remakeNeed" hidden>
+                <span id="remakeNeedText"></span>
+                <button class="btn primary small" id="remakeDownload">Download</button>
+              </div>
             </div>
 
             <div class="field">
@@ -193,7 +210,7 @@
                 <button data-filter="all" class="active">All</button>
                 <button data-filter="fav">Favourites</button>
                 <button data-filter="song">Songs</button>
-                <button data-filter="cover">Covers</button>
+                <button data-filter="cover">Remakes</button>
               </div>
               <button class="btn ghost small" id="openLibraryDir">Show folder</button>
             </div>
@@ -226,8 +243,8 @@
             <div id="modelsLlm"></div>
           </section>
           <section class="model-group">
-            <h3>Covers <span class="badge">optional</span></h3>
-            <p class="muted small">Needed for Song Cover. Download one transcriber and the encoder of the same precision.</p>
+            <h3>Remakes <span class="badge">optional</span></h3>
+            <p class="muted small">Needed for Remake a Song. “Same melody” uses the transcriber, “Continue from a section” the tokenizer; both listen through the MERT encoder of the same precision. Downloading one brings its encoder along.</p>
             <div id="modelsCovers"></div>
           </section>
         </div>

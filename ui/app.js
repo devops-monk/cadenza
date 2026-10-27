@@ -17,6 +17,8 @@ const state = {
   view: "create",
   tab: "song",
   coverPath: null,
+  coverInfo: null,
+  remake: "cover",
   settings: null,
   system: null,
   catalog: null,
@@ -86,7 +88,7 @@ function artSvg(seed) {
 }
 
 function kindLabel(kind) {
-  return { song: "Song", cover: "Cover", variation: "Variation" }[kind] || "Song";
+  return { song: "Song", cover: "Cover", remix: "Remix", variation: "Variation" }[kind] || "Song";
 }
 
 // --------------------------------------------------------------- navigation
@@ -171,21 +173,119 @@ $$(".tabs .tab[data-tab]").forEach((tab) =>
     $(".create").dataset.tab = state.tab;
     const cover = state.tab === "cover";
     $("#tabHint").textContent = cover
-      ? "Pick a recording. Its melody is sung again in the style you describe."
+      ? "Pick a song you have. Get a new version of it in the style you describe."
       : "Write a prompt, and lyrics if you like. Get a song of your own.";
-    $("#descLabel").textContent = cover ? "Style of the cover" : "Description";
+    $("#descLabel").textContent = cover ? "Style of the new version" : "Description";
+    if (cover) renderRemakeNeed();
     form.description.placeholder = cover ? "jazz funk with a female singer and a horn section" : IDEAS[0];
-    $("#descReq").textContent = cover ? "Optional" : "Required";
   })
 );
 
-$("#coverPick").addEventListener("click", async () => {
-  const path = await dialog.open({ multiple: false, directory: false, filters: [{ name: "Audio", extensions: ["mp3", "wav"] }] });
-  if (!path) return;
-  state.coverPath = typeof path === "string" ? path : path.path;
-  $("#coverName").textContent = state.coverPath.split(/[\\/]/).pop();
+// ------------------------------------------------------------------ remake
+
+const AUDIO_EXTENSIONS = ["mp3", "wav", "flac", "m4a", "aac", "mp4", "ogg", "oga", "aif", "aiff"];
+
+async function chooseRecording(path) {
+  const name = path.split(/[\\/]/).pop();
+  const ext = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+  if (!AUDIO_EXTENSIONS.includes(ext)) return toast(`${name} is not an audio file Cadenza can read.`, true);
+  $("#coverName").textContent = name;
+  $("#coverMeta").textContent = "Reading…";
   $("#coverPick").classList.add("has");
+  formError("");
+  try {
+    const info = await invoke("audio_info", { path });
+    state.coverPath = path;
+    state.coverInfo = info;
+    $("#coverMeta").textContent = `${fmtTime(info.duration)} long`;
+    const max = Math.max(1, Math.floor(info.duration));
+    for (const el of [$("#sourceStart"), $("#sourceEnd")]) el.max = max;
+    $("#sourceStart").value = 0;
+    $("#sourceEnd").value = Math.min(30, max);
+    updateSection();
+  } catch (error) {
+    state.coverPath = null;
+    state.coverInfo = null;
+    $("#coverPick").classList.remove("has");
+    $("#coverName").textContent = name;
+    $("#coverMeta").textContent = String(error);
+  }
+  renderRemakeNeed();
+}
+
+$("#coverPick").addEventListener("click", async () => {
+  const path = await dialog.open({ multiple: false, directory: false, filters: [{ name: "Audio", extensions: AUDIO_EXTENSIONS }] });
+  if (path) chooseRecording(typeof path === "string" ? path : path.path);
 });
+
+$$("#remakeSeg [data-remake]").forEach((b) =>
+  b.addEventListener("click", () => {
+    state.remake = b.dataset.remake;
+    $$("#remakeSeg [data-remake]").forEach((x) => x.classList.toggle("active", x === b));
+    $(".remake-cover").hidden = state.remake !== "cover";
+    $(".remake-continue").hidden = state.remake !== "continue";
+    renderRemakeNeed();
+  })
+);
+
+function updateSection(changed) {
+  const start = $("#sourceStart");
+  const end = $("#sourceEnd");
+  if (Number(end.value) <= Number(start.value)) {
+    if (changed === start) end.value = Math.min(Number(end.max), Number(start.value) + 1);
+    else start.value = Math.max(0, Number(end.value) - 1);
+  }
+  $("#sourceStartValue").textContent = fmtTime(Number(start.value));
+  $("#sourceEndValue").textContent = fmtTime(Number(end.value));
+}
+$("#sourceStart").addEventListener("input", (e) => updateSection(e.target));
+$("#sourceEnd").addEventListener("input", (e) => updateSection(e.target));
+
+// Remakes need one more model each; say which, and fetch it in one click.
+function renderRemakeNeed() {
+  const c = state.catalog;
+  const box = $("#remakeNeed");
+  if (!c || state.tab !== "cover") return (box.hidden = true);
+  const pairs = state.remake === "continue" ? [["tokenizer-q8", "mert-q8"], ["tokenizer-f32", "mert-f32"]] : [["sheetsage-q8", "mert-q8"], ["sheetsage-f32", "mert-f32"]];
+  const entry = (id) => c.entries.find((e) => e.id === id) || {};
+  if (pairs.some((pair) => pair.every((id) => entry(id).installed))) return (box.hidden = true);
+  const missing = pairs[0].map(entry).filter((e) => !e.installed);
+  const busy = missing.every((e) => e.downloading || (progress[e.id] && ["running", "verifying"].includes(progress[e.id].state)));
+  const bytes = missing.reduce((n, e) => n + Math.max(0, (e.bytes || 0) - (e.partial || 0)), 0);
+  box.hidden = false;
+  $("#remakeNeedText").textContent = busy
+    ? `Downloading ${missing.map((e) => e.label).join(" and ")}…`
+    : `This kind of remake needs ${missing.map((e) => e.label).join(" and ")} (${fmtBytes(bytes)}), once.`;
+  $("#remakeDownload").hidden = busy;
+}
+
+$("#remakeDownload").addEventListener("click", async () => {
+  try {
+    const started = await invoke("download_required", { remake: state.remake });
+    for (const id of started) {
+      const e = state.catalog.entries.find((x) => x.id === id);
+      if (e) progress[id] = { id, state: "running", downloaded: e.partial, total: e.bytes, bytes_per_sec: 0 };
+    }
+  } catch (error) {
+    toast(String(error), true);
+  }
+  refreshCatalog();
+});
+
+// Drag a song from Finder or Explorer onto the window.
+if (T.event) {
+  const pick = () => $("#coverPick");
+  T.event.listen("tauri://drag-enter", () => state.view === "create" && pick().classList.add("drop"));
+  T.event.listen("tauri://drag-leave", () => pick().classList.remove("drop"));
+  T.event.listen("tauri://drag-drop", (event) => {
+    pick().classList.remove("drop");
+    const path = (event.payload && event.payload.paths || [])[0];
+    if (!path) return;
+    if (state.tab !== "cover") $('.tabs .tab[data-tab="cover"]').click();
+    show("create");
+    chooseRecording(path);
+  });
+}
 
 function readRequest() {
   const number = (el) => (el.value.trim() === "" ? null : Number(el.value));
@@ -205,6 +305,9 @@ function readRequest() {
     seed: number(form.seed),
     cover_audio: state.tab === "cover" ? state.coverPath : null,
     melody_only: $("#melodyOnly").checked,
+    remake: state.remake,
+    source_start: Number($("#sourceStart").value),
+    source_end: Number($("#sourceEnd").value),
   };
 }
 
@@ -223,8 +326,8 @@ function formError(message) {
 
 async function createSong(request) {
   formError("");
-  if (state.tab === "cover" && !request.cover_audio) return formError("Choose a recording to cover.");
-  if (state.tab === "cover" && !request.lyrics.trim() && !request.instrumental) return formError("A cover needs lyrics that fit the melody — the original lyrics work best.");
+  if (state.tab === "cover" && !request.cover_audio) return formError("Choose the song to remake.");
+  if (state.tab === "cover" && !request.description && !request.style) return formError("Describe the style of the new version, e.g. “acoustic folk with a male singer”.");
   if (!request.description && !request.lyrics.trim()) return formError("Describe the song you want.");
   try {
     const job = await invoke("create_song", { request });
@@ -335,8 +438,9 @@ function filteredTracks() {
   const q = state.search.toLowerCase();
   return state.tracks.filter((t) => {
     if (state.filter === "fav" && !t.favorite) return false;
-    if (state.filter === "song" && t.kind === "cover") return false;
-    if (state.filter === "cover" && t.kind !== "cover") return false;
+    const remake = t.kind === "cover" || t.kind === "remix";
+    if (state.filter === "song" && remake) return false;
+    if (state.filter === "cover" && !remake) return false;
     if (!q) return true;
     return [t.title, t.lyrics, t.style, t.description].some((field) => (field || "").toLowerCase().includes(q));
   });
@@ -797,10 +901,11 @@ function renderModels() {
     ...by(["llm_runtime"]).map((e) => modelRow(e, { selectable: false })),
     ...by(["llm"]).map((e) => modelRow(e, { selectable: true, selected: s.llm_provider === "builtin" && e.id === s.llm_model, recommended: e.id === sys.recommended_llm })),
   ].join("");
-  $("#modelsCovers").innerHTML = by(["transcriber", "transcriber_base"]).map((e) => modelRow(e, { selectable: false })).join("");
+  $("#modelsCovers").innerHTML = by(["transcriber", "tokenizer", "transcriber_base"]).map((e) => modelRow(e, { selectable: false })).join("");
   const free = c.free_bytes != null ? ` · ${fmtBytes(c.free_bytes)} free` : "";
   $("#modelsMeta").textContent = `${c.models_dir}${free}`;
   renderNeeded();
+  renderRemakeNeed();
 }
 
 // Everything a first song needs, in one button.
@@ -1075,6 +1180,7 @@ listen("download", (p) => {
     refreshEngine();
     if (state.view === "settings") refreshStorage();
   } else if (state.view === "models") renderModels();
+  else if (state.view === "create") renderRemakeNeed();
 });
 listen("engine-log", (line) => {
   const log = $("#engineLog");

@@ -22,9 +22,13 @@ pub enum Kind {
     Vae,
     /// Decoder LoRA merged under every render.
     Companion,
-    /// SheetSage2 head, enables covers. Needs `TranscriberBase` beside it.
+    /// SheetSage2 head, enables "same melody" remakes. Needs `TranscriberBase` beside it.
     Transcriber,
+    /// MERT encoder that both the transcriber and the tokenizer read.
     TranscriberBase,
+    /// Audio tokenizer head, enables "continue from a section" remakes.
+    /// Needs `TranscriberBase` beside it.
+    Tokenizer,
     /// GGUF text model served by llama-server.
     Llm,
     /// llama.cpp binaries, a tar.gz unpacked into `runtime/llama`.
@@ -91,16 +95,22 @@ pub fn items() -> Vec<Item> {
         },
         yue("sheetsage-q8", Kind::Transcriber, "SheetSage2 transcriber · Q8_0", "SheetSage2-Q8_0.gguf", 105_629_856,
             "95d8fa8761753b4833782a52b68d5c0afa3bd3cfbc03d3dcbbf8ded0c13f611e", 0,
-            "Optional. Listens to a recording and writes its melody as a score, for covers."),
+            "Listens to a recording and writes its melody as a score, for “same melody” remakes."),
         yue("sheetsage-f32", Kind::Transcriber, "SheetSage2 transcriber · F32", "SheetSage2-F32.gguf", 228_738_176,
             "4988c01b64c2812dd71eb89a9ab1937a3385ff2ba869bf495ccb69af4ec744cd", 0,
             "Optional, full precision transcriber head."),
         yue("mert-q8", Kind::TranscriberBase, "MERT-v2 audio encoder · Q8_0", "MERT-v2-FullSong-Q8_0.gguf", 902_283_712,
             "35a6032ec7e8123c02becdefc7bfe10a3adb33faa8a1951dc0af864b4494b8ef", 0,
-            "Optional. The encoder the transcriber reads; needed for covers."),
+            "The audio encoder every remake listens with."),
         yue("mert-f32", Kind::TranscriberBase, "MERT-v2 audio encoder · F32", "MERT-v2-FullSong-F32.gguf", 2_529_780_448,
             "695b247660405474fffa7bab4d019227325b8d169f96aaa96bad488033fec637", 0,
             "Optional, full precision encoder."),
+        yue("tokenizer-q8", Kind::Tokenizer, "Realaudio tokenizer v9 · Q8_0", "yue2-mothersuperior-realaudio-tokenizer-v4-Q8_0.gguf", 46_527_328,
+            "ab860529c61bcef0350d5e43d4291835b380e76246c48be4f26fa8839fe31ce5", 0,
+            "Turns a recording into the codes YuE2 sings, for “continue from a section” remakes."),
+        yue("tokenizer-f32", Kind::Tokenizer, "Realaudio tokenizer v9 · F32", "yue2-mothersuperior-realaudio-tokenizer-v4-F32.gguf", 171_275_040,
+            "5e87c59488704ec538ec443157f65a213176e4bf8b14ba3b119148ae2099ddfd", 0,
+            "Full precision tokenizer head."),
         llm("gemma-e4b-q4", "Gemma 4 E4B IT · QAT q4_0", "gemma-4-E4B_q4_0-it.gguf",
             "https://huggingface.co/google/gemma-4-E4B-it-qat-q4_0-gguf/resolve/4b4a2c1d584be7264f87aac328a1bc739ce81b6c/gemma-4-E4B_q4_0-it.gguf",
             5_154_941_280, 16, "Light and multilingual. Good lyrics in English, Hindi, Spanish, Chinese and more."),
@@ -172,6 +182,16 @@ pub fn recommended_llm(ram_gb: f64) -> &'static str {
 /// The transcriber and the encoder beside it, matched by precision.
 pub fn transcriber_pairs() -> [(&'static str, &'static str); 2] {
     [("sheetsage-q8", "mert-q8"), ("sheetsage-f32", "mert-f32")]
+}
+
+/// The tokenizer and the encoder beside it, matched by precision.
+pub fn tokenizer_pairs() -> [(&'static str, &'static str); 2] {
+    [("tokenizer-q8", "mert-q8"), ("tokenizer-f32", "mert-f32")]
+}
+
+/// The two heads a remake can use, and the pairs each needs.
+pub fn remake_pairs(mode: &str) -> [(&'static str, &'static str); 2] {
+    if mode == "continue" { tokenizer_pairs() } else { transcriber_pairs() }
 }
 
 #[cfg(test)]
