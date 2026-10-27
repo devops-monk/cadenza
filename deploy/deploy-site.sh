@@ -18,9 +18,22 @@ EMAIL="${CERTBOT_EMAIL:-}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 ssh_opts=(-o BatchMode=yes -o ConnectTimeout=15)
 
+# Images, CSS and JS are cached for days, so every reference in the pages
+# gets ?v=<content hash>: a changed file is a new URL and browsers fetch it.
+stage="$(mktemp -d)"
+trap 'rm -rf "$stage"' EXIT
+rsync -a --exclude tools/ "$root/site/" "$stage/"
+for page in "$stage"/*.html; do
+    SITE="$stage" perl -i -MDigest::MD5 -pe '
+        s{((?:images/[\w.-]+\.(?:png|jpe?g|webp|svg|ico))|style\.css|main\.js)(?=["\x27)\s])}{
+            my $f = "$ENV{SITE}/$1";
+            if (open(my $fh, "<", $f)) { binmode $fh; "$1?v=" . substr(Digest::MD5->new->addfile($fh)->hexdigest, 0, 8) } else { $1 }
+        }ge' "$page"
+done
+
 echo "==> Uploading site to $HOST:$WEBROOT"
 ssh "${ssh_opts[@]}" "$HOST" "mkdir -p $WEBROOT"
-rsync -az --delete --exclude tools/ -e "ssh ${ssh_opts[*]}" "$root/site/" "$HOST:$WEBROOT/"
+rsync -az --delete -e "ssh ${ssh_opts[*]}" "$stage/" "$HOST:$WEBROOT/"
 scp "${ssh_opts[@]}" -q "$root/deploy/$DOMAIN.conf" "$HOST:/tmp/$DOMAIN.conf"
 
 ssh "${ssh_opts[@]}" "$HOST" DOMAIN="$DOMAIN" WEBROOT="$WEBROOT" EMAIL="$EMAIL" 'bash -s' <<'REMOTE'
