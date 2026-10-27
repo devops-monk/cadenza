@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cadenza</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand" data-tauri-drag-region>
+        <img src="icon.png" alt="" class="brand-mark" />
+        <div class="brand-text">
+          <strong>Cadenza</strong>
+          <em>Music</em>
+        </div>
+      </div>
+      <nav class="nav">
+        <button data-view="home"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/></svg>Home</button>
+        <button data-view="create" class="active"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Create</button>
+        <button data-view="library"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>Library</button>
+        <button data-view="models"><svg viewBox="0 0 24 24"><path d="M12 3 3 7.5l9 4.5 9-4.5zM3 12l9 4.5 9-4.5M3 16.5 12 21l9-4.5"/></svg>Models</button>
+        <button data-view="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Settings</button>
+      </nav>
+      <div class="sidebar-foot">
+        <button class="engine-pill" id="enginePill" title="Music engine">
+          <span class="dot"></span><span class="label">Engine</span>
+        </button>
+        <div class="theme-switch" role="group" aria-label="Theme">
+          <button data-theme-choice="light">Light</button>
+          <button data-theme-choice="auto">Auto</button>
+          <button data-theme-choice="dark">Dark</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <!-- HOME -->
+      <section class="view" id="view-home">
+        <div class="home">
+          <div class="home-hero">
+            <img src="icon.png" alt="" class="hero-mark" />
+            <h1>What should we make today?</h1>
+            <p class="muted">Describe a song. Cadenza writes the lyrics, composes the score and sings it — all on this machine.</p>
+            <div class="hero-box">
+              <textarea id="heroPrompt" rows="3" maxlength="500" placeholder="A Hindi lullaby for my 3-year-old son Babu, who loves painting and music"></textarea>
+              <button class="btn primary" id="heroGo">Create <span aria-hidden="true">→</span></button>
+            </div>
+            <div class="chips" id="heroChips"></div>
+          </div>
+          <div class="setup card" id="setupCard">
+            <h3>Getting ready</h3>
+            <ol class="checklist" id="checklist"></ol>
+          </div>
+          <div class="home-recent">
+            <div class="section-title"><span>Recent</span><button class="link" data-goto="library">See all tracks →</button></div>
+            <div class="track-list" id="homeRecent"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CREATE -->
+      <section class="view active" id="view-create">
+        <div class="create">
+          <div class="create-form">
+            <div class="tabs" role="tablist">
+              <button class="tab active" data-tab="song">Song</button>
+              <button class="tab" data-tab="cover">Song Cover</button>
+            </div>
+            <p class="muted small" id="tabHint">Write a prompt, and lyrics if you like. Get a song of your own.</p>
+
+            <div class="field cover-only">
+              <div class="label-row"><label>Recording</label><span class="req">Required</span></div>
+              <button class="file-pick" id="coverPick">
+                <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                <span id="coverName">Choose an MP3 or WAV…</span>
+              </button>
+              <label class="check"><input type="checkbox" id="melodyOnly" /> Melody only (ignore the chords)</label>
+              <p class="hint">The melody is transcribed to a score and sung again in your style. The original lyrics fit best.</p>
+            </div>
+
+            <div class="field">
+              <div class="label-row"><label for="description" id="descLabel">Description</label><span class="req" id="descReq">Required</span></div>
+              <div class="textarea-wrap">
+                <textarea id="description" rows="5" maxlength="500" placeholder="compose a hindi song for my 3 years old son. his name is babu singh and he loves music and he goes to nursery and likes painting"></textarea>
+                <div class="textarea-foot">
+                  <span class="counter" id="descCount">0/500</span>
+                  <button class="icon-btn" id="shuffleIdea" title="Inspire me"><svg viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></button>
+                </div>
+              </div>
+            </div>
+
+            <div class="field">
+              <div class="label-row">
+                <label for="lyrics">Lyrics</label><span class="opt">Optional</span>
+                <span class="spacer"></span>
+                <label class="toggle"><input type="checkbox" id="instrumental" /><span class="track"></span>Instrumental</label>
+              </div>
+              <div class="textarea-wrap">
+                <textarea id="lyrics" rows="7" placeholder="[Verse]&#10;&#10;[Chorus]"></textarea>
+                <div class="textarea-foot">
+                  <span class="spacer"></span>
+                  <button class="btn ghost small" id="writeLyrics" title="Write lyrics from the description"><span class="spark">✦</span> Write lyrics</button>
+                </div>
+              </div>
+              <p class="hint">Leave empty and the model writes them.</p>
+            </div>
+
+            <div class="field">
+              <div class="label-row"><label for="title">Song title</label><span class="opt">Optional</span></div>
+              <input id="title" type="text" placeholder="Leave empty to auto-name" />
+            </div>
+
+            <details class="advanced" id="advanced">
+              <summary>Advanced <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></summary>
+              <div class="field">
+                <div class="label-row"><label for="style">Style</label><span class="opt">Optional</span></div>
+                <textarea id="style" rows="3" placeholder="Leave empty and the model writes it: genre, instruments, voice, mood, tempo…"></textarea>
+              </div>
+              <div class="grid2">
+                <div class="field">
+                  <label for="language">Lyrics language</label>
+                  <select id="language">
+                    <option value="auto">From the description</option>
+                    <option>English</option><option>Hindi</option><option>Chinese</option><option>Japanese</option>
+                    <option>Korean</option><option>Spanish</option><option>French</option><option>German</option>
+                    <option>Portuguese</option><option>Russian</option><option>Italian</option><option>Punjabi</option>
+                    <option>Bengali</option><option>Tamil</option><option>Urdu</option><option>Arabic</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="duration">Length <span class="value" id="durationValue">3:00</span></label>
+                  <input id="duration" type="range" min="30" max="360" step="15" value="180" />
+                </div>
+                <div class="field">
+                  <label for="cot">Score</label>
+                  <select id="cot">
+                    <option value="full">Melody + chords (best)</option>
+                    <option value="melody">Melody only</option>
+                    <option value="off">No score (fastest)</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="variations">Variations</label>
+                  <select id="variations"><option>1</option><option>2</option><option>3</option><option>4</option></select>
+                </div>
+                <div class="field">
+                  <label for="steps">Quality steps <span class="value" id="stepsValue">32</span></label>
+                  <input id="steps" type="range" min="8" max="64" step="4" value="32" />
+                </div>
+                <div class="field">
+                  <label for="temperature">Creativity <span class="value" id="temperatureValue">1.00</span></label>
+                  <input id="temperature" type="range" min="0.6" max="1.4" step="0.05" value="1.0" />
+                </div>
+                <div class="field">
+                  <label for="lmSeed">Composition seed</label>
+                  <input id="lmSeed" type="number" placeholder="Random" />
+                </div>
+                <div class="field">
+                  <label for="seed">Sound seed</label>
+                  <input id="seed" type="number" placeholder="Random" />
+                </div>
+              </div>
+            </details>
+
+            <div class="create-bar">
+              <div class="form-error" id="formError" hidden></div>
+              <button class="btn primary big" id="createBtn">Create <span aria-hidden="true">→</span></button>
+            </div>
+          </div>
+
+          <div class="session">
+            <div class="section-title"><span>This session</span></div>
+            <div class="track-list" id="sessionList"></div>
+            <div class="empty" id="sessionEmpty">
+              <div class="empty-art"></div>
+              <p>Your songs appear here as they are made.</p>
+            </div>
+            <button class="link see-all" data-goto="library">See all tracks →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- LIBRARY -->
+      <section class="view" id="view-library">
+        <div class="page">
+          <header class="page-head">
+            <h2>Library</h2>
+            <div class="page-tools">
+              <input type="search" id="librarySearch" placeholder="Search titles, lyrics, styles…" />
+              <div class="seg" id="libraryFilter">
+                <button data-filter="all" class="active">All</button>
+                <button data-filter="fav">Favourites</button>
+                <button data-filter="song">Songs</button>
+                <button data-filter="cover">Covers</button>
+              </div>
+              <button class="btn ghost small" id="openLibraryDir">Show folder</button>
+            </div>
+          </header>
+          <div class="track-list" id="libraryList"></div>
+          <div class="empty" id="libraryEmpty" hidden><div class="empty-art"></div><p>No tracks yet. Make your first one in Create.</p></div>
+        </div>
+      </section>
+
+      <!-- MODELS -->
+      <section class="view" id="view-models">
+        <div class="page">
+          <header class="page-head">
+            <h2>Models</h2>
+            <div class="muted small" id="modelsMeta"></div>
+          </header>
+          <div class="notice" id="engineNotice" hidden></div>
+          <section class="model-group">
+            <h3>Music engine <span class="badge">YuE2 · CC BY-NC 4.0</span></h3>
+            <p class="muted small">Pick one size. Bigger sizes sound a little better and need more memory. The VAE and the companion are shared by every size.</p>
+            <div id="modelsMusic"></div>
+          </section>
+          <section class="model-group">
+            <h3>Language model <span class="badge">writes lyrics, titles and styles</span></h3>
+            <p class="muted small">Used when you leave the lyrics empty. Pick one size, or connect Ollama / another server in Settings to use any model you like.</p>
+            <div id="modelsLlm"></div>
+          </section>
+          <section class="model-group">
+            <h3>Covers <span class="badge">optional</span></h3>
+            <p class="muted small">Needed for Song Cover. Download one transcriber and the encoder of the same precision.</p>
+            <div id="modelsCovers"></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="view" id="view-settings">
+        <div class="page narrow">
+          <header class="page-head"><h2>Settings</h2></header>
+
+          <section class="card settings-card">
+            <h3>Language model</h3>
+            <div class="seg wide" id="providerSeg">
+              <button data-provider="builtin">Built-in (llama.cpp)</button>
+              <button data-provider="ollama">Ollama</button>
+              <button data-provider="open_ai">OpenAI-compatible</button>
+            </div>
+            <div class="provider-pane" data-pane="builtin">
+              <div class="field"><label>Model</label><select id="llmModel"></select></div>
+              <p class="hint">Download models in Models. The runtime starts on demand and stops when it is not needed.</p>
+            </div>
+            <div class="provider-pane" data-pane="ollama">
+              <div class="grid2">
+                <div class="field"><label>Ollama URL</label><input id="ollamaUrl" type="text" /></div>
+                <div class="field"><label>Model</label>
+                  <div class="row"><input id="ollamaModel" type="text" list="ollamaList" placeholder="gemma3:12b" /><button class="btn ghost small" id="ollamaRefresh">Refresh</button></div>
+                  <datalist id="ollamaList"></datalist>
+                </div>
+              </div>
+              <p class="hint">Any model you pulled — <code>ollama pull qwen3:32b</code> — big machines can use big models.</p>
+            </div>
+            <div class="provider-pane" data-pane="open_ai">
+              <div class="grid2">
+                <div class="field"><label>Server URL</label><input id="openaiUrl" type="text" placeholder="http://127.0.0.1:1234" /></div>
+                <div class="field"><label>Model</label><input id="openaiModel" type="text" /></div>
+                <div class="field"><label>API key</label><input id="openaiKey" type="password" placeholder="Not needed for local servers" /></div>
+              </div>
+              <p class="hint">LM Studio, vLLM, llama.cpp on another box — anything that speaks <code>/v1/chat/completions</code>.</p>
+            </div>
+            <div class="row">
+              <button class="btn ghost small" id="llmTest">Test</button>
+              <span class="muted small" id="llmTestResult"></span>
+            </div>
+            <label class="check"><input type="checkbox" id="unloadLlm" /> Unload the language model before making music (recommended under 32 GB)</label>
+          </section>
+
+          <section class="card settings-card">
+            <h3>Music engine</h3>
+            <div class="grid2">
+              <div class="field"><label>Model size</label><select id="backbone"></select></div>
+              <div class="field"><label>Context (memory)</label>
+                <select id="maxSeq">
+                  <option value="">Full — songs up to 6 min</option>
+                  <option value="16384">16k — less memory</option>
+                  <option value="8192">8k — least memory, ~2 min songs</option>
+                </select>
+              </div>
+              <div class="field"><label>Output</label>
+                <select id="outputFormat">
+                  <option value="mp3">MP3</option><option value="wav16">WAV 16-bit</option><option value="wav24">WAV 24-bit</option>
+                </select>
+              </div>
+              <div class="field"><label>MP3 bitrate</label>
+                <select id="mp3Bitrate"><option>128</option><option>192</option><option>256</option><option>320</option></select>
+              </div>
+            </div>
+            <label class="check"><input type="checkbox" id="keepLoaded" /> Keep the whole model in memory between stages (faster, needs 24 GB+)</label>
+            <label class="check"><input type="checkbox" id="useCompanion" /> Use the realaudio decoder companion</label>
+            <div class="field"><label>yue-server path</label><input id="enginePath" type="text" placeholder="Bundled engine" /></div>
+            <div class="field"><label>Models folder</label><input id="modelsDir" type="text" placeholder="App data folder" /></div>
+            <div class="row">
+              <button class="btn ghost small" id="engineStart">Start engine</button>
+              <button class="btn ghost small" id="engineStop">Stop engine</button>
+              <button class="btn ghost small" id="engineLogBtn">Show log</button>
+            </div>
+            <pre class="log" id="engineLog" hidden></pre>
+          </section>
+
+          <section class="card settings-card">
+            <h3>This machine</h3>
+            <div class="muted small" id="systemInfo"></div>
+          </section>
+          <div class="settings-save"><span class="muted small" id="saveState"></span><button class="btn primary" id="saveSettings">Save settings</button></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="player" id="player">
+      <div class="player-inner">
+        <div class="now">
+          <div class="disc" id="playerArt"></div>
+          <div class="now-text">
+            <strong id="playerTitle">Nothing playing</strong>
+            <span id="playerKind" class="muted small">—</span>
+          </div>
+        </div>
+        <div class="transport">
+          <button class="icon-btn" id="prevBtn" title="Previous"><svg viewBox="0 0 24 24"><path d="M6 5v14M19 5 9 12l10 7z" class="fill"/></svg></button>
+          <button class="play-btn" id="playBtn" title="Play"><svg viewBox="0 0 24 24" class="fill"><path id="playIcon" d="M8 5v14l11-7z"/></svg></button>
+          <button class="icon-btn" id="nextBtn" title="Next"><svg viewBox="0 0 24 24"><path d="M18 5v14M5 5l10 7-10 7z" class="fill"/></svg></button>
+        </div>
+        <span class="time" id="curTime">0:00</span>
+        <canvas class="wave" id="wave"></canvas>
+        <span class="time" id="durTime">0:00</span>
+        <div class="player-tools">
+          <button class="icon-btn" id="favBtn" title="Favourite"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.6 4.5c2.1 0 3.6 1.2 4.4 2.6.8-1.4 2.3-2.6 4.4-2.6 3.6 0 5.7 3.9 4.2 7.3C19.5 16.4 12 21 12 21z"/></svg></button>
+          <button class="icon-btn" id="dlBtn" title="Save as…"><svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
+          <button class="icon-btn" id="loopBtn" title="Repeat"><svg viewBox="0 0 24 24"><path d="M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4"/></svg></button>
+          <button class="icon-btn" id="muteBtn" title="Mute"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4z" class="fill"/><path id="volWaves" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>
+          <input type="range" id="volume" min="0" max="1" step="0.01" value="0.9" />
+          <button class="icon-btn" id="lyricsBtn" title="Details"><svg viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg></button>
+        </div>
+      </div>
+      <audio id="audio" preload="auto"></audio>
+    </footer>
+  </div>
+
+  <!-- Track detail drawer -->
+  <div class="drawer" id="drawer" hidden>
+    <div class="drawer-backdrop" data-close></div>
+    <div class="drawer-panel">
+      <header>
+        <div class="drawer-art" id="drawerArt"></div>
+        <div class="drawer-head">
+          <input id="drawerTitle" class="title-edit" />
+          <div class="muted small" id="drawerMeta"></div>
+        </div>
+        <button class="icon-btn" data-close title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </header>
+      <div class="drawer-actions">
+        <button class="btn primary small" id="drawerPlay">▶ Play</button>
+        <button class="btn ghost small" id="drawerVariation" title="Same composition and singing, new sound">⟳ New variation</button>
+        <button class="btn ghost small" id="drawerReuse">Reuse prompt</button>
+        <button class="btn ghost small" id="drawerSave">Save as…</button>
+        <button class="btn danger small" id="drawerDelete">Delete</button>
+      </div>
+      <div class="tabs small-tabs">
+        <button class="tab active" data-dtab="lyrics">Lyrics</button>
+        <button class="tab" data-dtab="style">Style</button>
+        <button class="tab" data-dtab="score">Score</button>
+        <button class="tab" data-dtab="prompt">Prompt</button>
+      </div>
+      <pre class="drawer-body" id="drawerBody"></pre>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

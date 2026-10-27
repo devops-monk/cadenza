@@ -1,0 +1,6 @@
+/engine-build/
+/src-tauri/target/
+/src-tauri/resources/yue2-cpp/*
+!/src-tauri/resources/yue2-cpp/.keep
+/src-tauri/gen/
+.DS_Store

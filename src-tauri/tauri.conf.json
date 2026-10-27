@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Cadenza",
+  "version": "0.1.0",
+  "identifier": "app.cadenza.studio",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Cadenza",
+        "width": 1360,
+        "height": 880,
+        "minWidth": 980,
+        "minHeight": 640,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Music",
+    "shortDescription": "Prompt to full song, on your own machine",
+    "copyright": "MIT. YuE2 weights are CC BY-NC 4.0.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "resources/yue2-cpp/": "yue2-cpp/"
+    },
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "signingIdentity": "-"
+    },
+    "windows": {
+      "nsis": { "installMode": "currentUser" }
+    },
+    "linux": {
+      "deb": { "section": "sound" }
+    }
+  }
+}

@@ -1,0 +1,335 @@
+//! Cadenza: prompt to full song, generated on your own machine.
+
+mod catalog;
+mod downloads;
+mod engine;
+mod jobs;
+mod library;
+mod llm;
+mod settings;
+mod songwriter;
+mod system;
+
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, Manager, State};
+
+use crate::catalog::Item;
+use crate::settings::Settings;
+
+pub struct AppState {
+    pub data_dir: PathBuf,
+    pub resource_dir: Option<PathBuf>,
+    settings: Mutex<Settings>,
+    pub engine: Mutex<engine::Engine>,
+    pub llm: Mutex<llm::LlmRuntime>,
+    pub library: Mutex<library::Library>,
+    pub downloads: Arc<downloads::Downloads>,
+    pub client: engine::Client,
+    pub jobs: Mutex<Vec<jobs::Job>>,
+    pub cancels: Mutex<std::collections::HashMap<String, Arc<std::sync::atomic::AtomicBool>>>,
+    /// One generation at a time.
+    pub pipeline: tokio::sync::Mutex<()>,
+}
+
+impl AppState {
+    pub fn settings(&self) -> Settings {
+        self.settings.lock().unwrap().clone()
+    }
+
+    pub fn models_dir(&self) -> PathBuf {
+        self.settings.lock().unwrap().models_dir(&self.data_dir)
+    }
+
+    pub fn runtime_dir(&self) -> PathBuf {
+        self.data_dir.join("runtime")
+    }
+
+    fn settings_path(&self) -> PathBuf {
+        self.data_dir.join("settings.json")
+    }
+}
+
+type CommandResult<T> = Result<T, String>;
+
+fn err(error: impl std::fmt::Display) -> String {
+    error.to_string()
+}
+
+// ------------------------------------------------------------------ settings
+
+#[tauri::command]
+fn get_settings(state: State<AppState>) -> Settings {
+    state.settings()
+}
+
+#[tauri::command]
+fn save_settings(app: AppHandle, state: State<AppState>, settings: Settings) -> CommandResult<Settings> {
+    settings.save(&state.settings_path()).map_err(err)?;
+    let previous = std::mem::replace(&mut *state.settings.lock().unwrap(), settings.clone());
+    if previous.llm_model != settings.llm_model || previous.llm_provider != settings.llm_provider {
+        state.llm.lock().unwrap().stop();
+    }
+    if previous.engine_fingerprint() != settings.engine_fingerprint() {
+        state.engine.lock().unwrap().stop();
+    }
+    let _ = app.emit("engine", ());
+    Ok(settings)
+}
+
+#[tauri::command]
+fn system_info() -> system::SystemInfo {
+    system::info()
+}
+
+// -------------------------------------------------------------------- models
+
+#[derive(Serialize)]
+struct CatalogEntry {
+    #[serde(flatten)]
+    item: Item,
+    installed: bool,
+    downloading: bool,
+    partial: u64,
+    selected: bool,
+}
+
+#[derive(Serialize)]
+struct CatalogView {
+    entries: Vec<CatalogEntry>,
+    models_dir: String,
+    free_bytes: Option<u64>,
+    progress: Vec<downloads::Progress>,
+}
+
+fn free_space(path: &std::path::Path) -> Option<u64> {
+    #[cfg(unix)]
+    {
+        let mut probe = path.to_path_buf();
+        while !probe.exists() {
+            probe = probe.parent()?.to_path_buf();
+        }
+        let c_path = std::ffi::CString::new(probe.to_string_lossy().as_bytes()).ok()?;
+        let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
+        if unsafe { libc::statvfs(c_path.as_ptr(), &mut stat) } == 0 {
+            return Some(stat.f_bavail as u64 * stat.f_frsize as u64);
+        }
+        None
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        None
+    }
+}
+
+#[tauri::command]
+fn catalog(state: State<AppState>) -> CatalogView {
+    let settings = state.settings();
+    let models_dir = state.models_dir();
+    let runtime_dir = state.runtime_dir();
+    let entries = catalog::items()
+        .into_iter()
+        .map(|item| CatalogEntry {
+            installed: downloads::installed(&item, &models_dir, &runtime_dir),
+            downloading: state.downloads.is_active(item.id),
+            partial: downloads::partial_bytes(&item, &models_dir, &runtime_dir),
+            selected: item.id == settings.backbone || item.id == settings.llm_model,
+            item,
+        })
+        .collect();
+    CatalogView { entries, free_bytes: free_space(&models_dir), models_dir: models_dir.display().to_string(), progress: state.downloads.snapshot() }
+}
+
+#[tauri::command]
+fn download_start(app: AppHandle, state: State<AppState>, id: String) -> CommandResult<()> {
+    let item = catalog::find(&id).ok_or("unknown model")?;
+    state.downloads.start(app, item, state.models_dir(), state.runtime_dir());
+    Ok(())
+}
+
+#[tauri::command]
+fn download_cancel(state: State<AppState>, id: String) {
+    state.downloads.cancel(&id);
+}
+
+#[tauri::command]
+fn model_delete(app: AppHandle, state: State<AppState>, id: String) -> CommandResult<()> {
+    let item = catalog::find(&id).ok_or("unknown model")?;
+    let settings = state.settings();
+    if id == settings.backbone || id == "yue-vae" || id.starts_with("sheetsage") || id.starts_with("mert") || id == "yue-companion" {
+        state.engine.lock().unwrap().stop();
+    }
+    if id == settings.llm_model || id == "llama-runtime" {
+        state.llm.lock().unwrap().stop();
+    }
+    downloads::delete(&item, &state.models_dir(), &state.runtime_dir()).map_err(err)?;
+    let _ = app.emit("engine", ());
+    Ok(())
+}
+
+// -------------------------------------------------------------------- engine
+
+#[tauri::command]
+fn engine_status(state: State<AppState>) -> engine::EngineStatus {
+    let settings = state.settings();
+    let executable = engine::locate_executable(&settings, state.resource_dir.clone());
+    state.engine.lock().unwrap().status(&settings, &state.models_dir(), executable)
+}
+
+#[tauri::command]
+async fn engine_start(app: AppHandle) -> CommandResult<()> {
+    jobs::ensure_engine(&app).await.map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+fn engine_stop(app: AppHandle, state: State<AppState>) {
+    state.engine.lock().unwrap().stop();
+    state.llm.lock().unwrap().stop();
+    let _ = app.emit("engine", ());
+}
+
+#[tauri::command]
+fn engine_log(state: State<AppState>) -> Vec<String> {
+    state.engine.lock().unwrap().log_tail(200)
+}
+
+#[tauri::command]
+async fn llm_test(app: AppHandle) -> CommandResult<String> {
+    let state = app.state::<AppState>();
+    let settings = state.settings();
+    jobs::ensure_llm(&app, &settings).await.map_err(|e| format!("{e:#}"))?;
+    llm::chat(&settings, "Answer in one short sentence.", "Say hello to a musician.", 0.5).await.map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+async fn ollama_models(url: String) -> CommandResult<Vec<String>> {
+    llm::ollama_models(&url).await.map_err(|e| format!("could not reach Ollama: {e}"))
+}
+
+// ---------------------------------------------------------------------- jobs
+
+#[tauri::command]
+fn create_song(app: AppHandle, request: jobs::SongRequest) -> CommandResult<jobs::Job> {
+    if request.description.trim().is_empty() && request.lyrics.trim().is_empty() && request.parent_id.is_none() {
+        return Err("describe the song, or paste lyrics".into());
+    }
+    if request.description.chars().count() > 1000 {
+        return Err("keep the description under 1000 characters".into());
+    }
+    Ok(jobs::submit(app, request))
+}
+
+#[tauri::command]
+async fn write_lyrics(app: AppHandle, request: jobs::SongRequest) -> CommandResult<songwriter::Written> {
+    if request.description.trim().is_empty() {
+        return Err("describe the song first".into());
+    }
+    jobs::write_only(&app, request).await.map_err(|e| format!("{e:#}"))
+}
+
+#[tauri::command]
+fn cancel_job(app: AppHandle, id: String) {
+    jobs::cancel(&app, &id);
+}
+
+#[tauri::command]
+fn list_jobs(state: State<AppState>) -> Vec<jobs::Job> {
+    state.jobs.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn dismiss_job(state: State<AppState>, id: String) {
+    state.jobs.lock().unwrap().retain(|job| job.id != id || matches!(job.state.as_str(), "queued" | "running"));
+}
+
+// ------------------------------------------------------------------- library
+
+#[tauri::command]
+fn list_tracks(state: State<AppState>) -> Vec<library::Track> {
+    state.library.lock().unwrap().tracks.iter().map(|track| library::Track { replay: serde_json::Value::Null, ..track.clone() }).collect()
+}
+
+#[tauri::command]
+fn track_audio(state: State<AppState>, id: String) -> CommandResult<tauri::ipc::Response> {
+    let library = state.library.lock().unwrap();
+    let track = library.get(&id).ok_or("no such track")?;
+    let bytes = std::fs::read(library.path_of(track)).map_err(err)?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
+#[tauri::command]
+fn update_track(state: State<AppState>, id: String, title: Option<String>, favorite: Option<bool>) -> CommandResult<library::Track> {
+    state.library.lock().unwrap().update(&id, title, favorite).map(|t| library::Track { replay: serde_json::Value::Null, ..t }).map_err(err)
+}
+
+#[tauri::command]
+fn delete_track(app: AppHandle, state: State<AppState>, id: String) -> CommandResult<()> {
+    state.library.lock().unwrap().remove(&id).map_err(err)?;
+    let _ = app.emit("library", ());
+    Ok(())
+}
+
+#[tauri::command]
+fn export_track(state: State<AppState>, id: String, destination: String) -> CommandResult<()> {
+    let library = state.library.lock().unwrap();
+    let track = library.get(&id).ok_or("no such track")?;
+    library::export(&library.path_of(track), std::path::Path::new(&destination)).map_err(err)
+}
+
+#[tauri::command]
+fn track_file_name(state: State<AppState>, id: String) -> CommandResult<String> {
+    let library = state.library.lock().unwrap();
+    let track = library.get(&id).ok_or("no such track")?;
+    Ok(format!("{}.{}", library::safe_name(&track.title), library::extension(&track.format)))
+}
+
+#[tauri::command]
+fn library_dir(state: State<AppState>) -> String {
+    state.library.lock().unwrap().dir.display().to_string()
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            let data_dir = app.path().app_data_dir()?;
+            std::fs::create_dir_all(&data_dir)?;
+            let settings = Settings::load(&data_dir.join("settings.json"));
+            let library = library::Library::open(data_dir.join("library"));
+            app.manage(AppState {
+                resource_dir: app.path().resource_dir().ok(),
+                settings: Mutex::new(settings),
+                engine: Mutex::new(engine::Engine::default()),
+                llm: Mutex::new(llm::LlmRuntime::default()),
+                library: Mutex::new(library),
+                downloads: Arc::new(downloads::Downloads::default()),
+                client: engine::Client::default(),
+                jobs: Mutex::new(Vec::new()),
+                cancels: Mutex::new(Default::default()),
+                pipeline: tokio::sync::Mutex::new(()),
+                data_dir,
+            });
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            get_settings, save_settings, system_info,
+            catalog, download_start, download_cancel, model_delete,
+            engine_status, engine_start, engine_stop, engine_log, llm_test, ollama_models,
+            create_song, write_lyrics, cancel_job, list_jobs, dismiss_job,
+            list_tracks, track_audio, update_track, delete_track, export_track, track_file_name, library_dir,
+        ])
+        .build(tauri::generate_context!())
+        .expect("error while building Cadenza")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                let state = app.state::<AppState>();
+                state.engine.lock().unwrap().stop();
+                state.llm.lock().unwrap().stop();
+            }
+        });
+}

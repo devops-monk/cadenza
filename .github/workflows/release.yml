@@ -1,0 +1,188 @@
+# Builds Cadenza for macOS, Windows and Linux, the yue2.cpp music engine
+# included, and publishes the installers as a GitHub Release.
+#
+#   git tag v0.1.0 && git push origin v0.1.0   -> builds and publishes release v0.1.0
+#   Actions tab -> Release -> Run workflow      -> builds only (installers as run artifacts)
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Pinned in scripts/build-engine.{sh,ps1}; part of the engine cache key.
+  ENGINE_COMMIT: ec43393ef2c7f604cf0b054911eb6172eec5a6ee
+  VULKAN_VERSION: 1.4.313.2
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple Silicon, Metal)
+            os: macos-14
+            platform: macos-arm64
+            bundles: app,dmg
+          - name: Windows x64 (Vulkan)
+            os: windows-latest
+            platform: windows-x64
+            bundles: nsis,msi
+          - name: Linux x64 (Vulkan)
+            os: ubuntu-24.04
+            platform: linux-x64
+            bundles: deb,appimage
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          perl -0pi -e "s/\"version\": \"[^\"]*\"/\"version\": \"$version\"/" src-tauri/tauri.conf.json
+          perl -0pi -e "s/^version = \"[^\"]*\"/version = \"$version\"/m" src-tauri/Cargo.toml
+          echo "Building version $version"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.platform }}
+
+      - uses: seanmiddleditch/gha-setup-ninja@v5
+
+      # ------------------------------------------------------- system packages
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf \
+            libvulkan-dev glslc cmake
+
+      - name: Vulkan SDK (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = "$env:RUNNER_TEMP\VulkanSDK-Installer.exe"
+          curl.exe -fsSL -o $installer "https://sdk.lunarg.com/sdk/download/$env:VULKAN_VERSION/windows/vulkansdk-windows-X64-$env:VULKAN_VERSION.exe"
+          & $installer --accept-licenses --default-answer --confirm-command install
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\$env:VULKAN_VERSION"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\$env:VULKAN_VERSION\Bin"
+
+      # ----------------------------------------------------------- the engine
+      - name: Engine cache
+        id: engine-cache
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/yue2-cpp
+          key: engine-${{ matrix.platform }}-${{ env.ENGINE_COMMIT }}-${{ hashFiles('scripts/build-engine.sh', 'scripts/build-engine.ps1') }}
+
+      - name: Build yue-server (macOS / Linux)
+        if: steps.engine-cache.outputs.cache-hit != 'true' && runner.os != 'Windows'
+        env:
+          ENGINE_BUILD_ROOT: ${{ runner.temp }}/engine
+        run: ./scripts/build-engine.sh
+
+      - name: Build yue-server (Windows)
+        if: steps.engine-cache.outputs.cache-hit != 'true' && runner.os == 'Windows'
+        shell: pwsh
+        env:
+          # short path: the ggml tree is deep and MAX_PATH is 260
+          ENGINE_BUILD_ROOT: C:\e
+        run: ./scripts/build-engine.ps1 -Backend vulkan
+
+      # -------------------------------------------------------------- the app
+      - name: Tauri CLI
+        shell: bash
+        run: cargo tauri --version || cargo install tauri-cli --version "^2" --locked
+
+      - name: Test
+        working-directory: src-tauri
+        run: cargo test
+
+      - name: Build installers
+        working-directory: src-tauri
+        shell: bash
+        env:
+          # linuxdeploy (AppImage) without FUSE, and without stripping newer system libraries
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          NO_STRIP: "true"
+        run: cargo tauri build --bundles ${{ matrix.bundles }}
+
+      - name: Collect
+        shell: bash
+        run: |
+          mkdir -p dist
+          bundle=src-tauri/target/release/bundle
+          version="$(perl -ne 'print $1 if /"version": "([^"]*)"/' src-tauri/tauri.conf.json)"
+          case "${{ runner.os }}" in
+            macOS)
+              cp "$bundle"/dmg/*.dmg dist/
+              tar -czf "dist/Cadenza_${version}_${{ matrix.platform }}.app.tar.gz" -C "$bundle/macos" Cadenza.app ;;
+            Windows)
+              cp "$bundle"/nsis/*.exe "$bundle"/msi/*.msi dist/ ;;
+            Linux)
+              cp "$bundle"/deb/*.deb "$bundle"/appimage/*.AppImage dist/ ;;
+          esac
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cadenza-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          ## Install
+
+          | System | Download | GPU |
+          |---|---|---|
+          | macOS (Apple Silicon) | `.dmg` | Metal |
+          | Windows 10/11 x64 | `-setup.exe` (or `.msi`) | Vulkan: NVIDIA, AMD, Intel |
+          | Linux x64 | `.AppImage` or `.deb` | Vulkan |
+
+          Model weights are not included: open **Models** in the app and download them (about 9 GB for the recommended set).
+
+          **macOS:** the app is not notarised. If macOS says it is damaged, run
+          `xattr -cr /Applications/Cadenza.app` once, then open it.
+
+          YuE2 weights are CC BY-NC 4.0: music made with them is for non-commercial use.
+          EOF
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Cadenza $GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            --generate-notes
