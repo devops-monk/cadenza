@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::settings::Settings;
+use crate::styles::{self, Preset};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Written {
@@ -21,40 +22,58 @@ pub struct Brief<'a> {
     pub language: &'a str,
     pub instrumental: bool,
     pub duration: f32,
+    pub preset: Option<&'static Preset>,
 }
 
-const SYSTEM: &str = "You are a hit songwriter and music producer. You answer with one JSON object and nothing else: no markdown fences, no commentary.";
+const SYSTEM: &str = "You are a hit songwriter and music producer for Hollywood and Bollywood. You answer with one JSON object and nothing else: no markdown fences, no commentary.";
 
 /// Section tags without words: YuE2 plays the structure with no singing.
 pub const INSTRUMENTAL_LYRICS: &str = "[Intro]\n\n[Verse]\n\n[Chorus]\n\n[Verse]\n\n[Chorus]\n\n[Bridge]\n\n[Chorus]\n\n[Outro]";
 
 fn lines_for(duration: f32) -> &'static str {
     match duration as u32 {
-        0..=75 => "2 short sections (one verse and one chorus), 8-10 lines in total",
-        76..=150 => "verse, chorus, verse, chorus, 16-20 lines in total",
-        151..=240 => "verse, chorus, verse, chorus, bridge, chorus, outro, 22-30 lines in total",
-        _ => "intro, two or three verses, repeated choruses, a bridge and an outro, 30-40 lines in total",
+        0..=75 => "[Verse 1] and [Chorus], 8-10 lines in total",
+        76..=150 => "[Verse 1], [Chorus], [Verse 2], [Chorus], 16-20 lines in total",
+        151..=240 => "[Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Pre-Chorus], [Chorus], [Bridge], [Chorus], [Outro], 24-32 lines in total",
+        _ => "three verses ([Verse 1] to [Verse 3]), a [Pre-Chorus] before each [Chorus], a [Bridge] and an [Outro], 32-40 lines in total",
     }
 }
 
+/// The language of the song, as the brief or the preset names it.
+fn language_of<'a>(brief: &'a Brief) -> Option<&'a str> {
+    let chosen = brief.language.trim();
+    if !chosen.is_empty() && chosen != "auto" {
+        return Some(chosen);
+    }
+    brief.preset.map(|p| p.language)
+}
+
 fn user_prompt(brief: &Brief) -> String {
-    let language = if brief.language.trim().is_empty() || brief.language == "auto" {
-        "the language the description asks for (English when it names none). Write it in that language's native script".to_string()
-    } else {
-        format!("{} (in its native script)", brief.language)
+    let language = match language_of(brief) {
+        Some(language) => styles::script_rule(language),
+        None => format!(
+            "the language the description asks for (English when it names none). {}; any other language in its native script",
+            styles::script_rule("Hindi").replacen("Hindi", "Hindi, Punjabi, Urdu and other Indian languages are", 1)
+        ),
     };
     let mut prompt = format!("Song request: \"{}\"\n\n", brief.description.trim());
+    if let Some(preset) = brief.preset {
+        prompt.push_str(&format!("Genre: {}. Start from these style tags: \"{}\". {}\n\n", preset.label, preset.tags, preset.writing));
+    }
     prompt.push_str("Return JSON with exactly these keys:\n");
-    prompt.push_str("- \"title\": a short catchy song title (2-6 words) in the song's language.\n");
-    prompt.push_str("- \"style\": ONE English paragraph of 30-60 words describing the production for a music model: genre and sub-genre, era, tempo (slow / mid / fast and a BPM), key instruments, the singer (gender, age feel, timbre, delivery), mood, and the arrangement arc. No artist names.\n");
+    prompt.push_str("- \"title\": a short catchy song title (2-6 words) in the song's language and script.\n");
+    let sung = language_of(brief).map(styles::language_tag).unwrap_or("the language of the lyrics, e.g. English or Hindi");
+    prompt.push_str(&format!(
+        "- \"style\": comma separated English tags for a music model, 8-14 short tags and no sentences, in this order: genre and sub-genre, mood, 3-5 key instruments, the voice (e.g. \"soft male vocals\", \"powerful female vocals\"), the tempo as \"<number> bpm\", and last the language sung ({sung}). Keep the request's details (a child's song stays playful). No artist or film names.\n"
+    ));
     if brief.instrumental {
-        prompt.push_str("- \"lyrics\": the empty string \"\". The piece is instrumental: say \"instrumental, no vocals\" in the style.\n");
+        prompt.push_str("- \"lyrics\": the empty string \"\". The piece is instrumental: put \"instrumental\" among the tags and no voice or language tag.\n");
     } else if !brief.lyrics.trim().is_empty() {
         prompt.push_str("- \"lyrics\": the lyrics below, copied exactly, word for word.\n");
         prompt.push_str(&format!("\nLyrics:\n{}\n", brief.lyrics.trim()));
     } else {
         prompt.push_str(&format!(
-            "- \"lyrics\": original singable lyrics in {language}. Structure: {}. Put each section tag on its own line, exactly one of [Verse], [Pre-Chorus], [Chorus], [Bridge], [Outro], and a blank line between sections. Short lines with a steady syllable count, simple vivid words, rhymes, and a chorus that repeats a hook. Use every specific detail from the request (names, ages, places, hobbies). No stage directions, no parentheses, no line numbers.\n",
+            "- \"lyrics\": original singable lyrics in {language}. Structure: {}. Put each section tag alone on its own line in square brackets and a blank line between sections. Lines of 6-10 syllables with a steady rhythm, simple vivid words and rhymes at the line ends. Every [Chorus] repeats the same words and holds the hook. Use every specific detail from the request (names, ages, places, hobbies). No stage directions, no parentheses, no line numbers.\n",
             lines_for(brief.duration)
         ));
     }
@@ -159,5 +178,36 @@ mod tests {
         assert_eq!(tidy_lyrics("a\nb"), "[Verse]\na\nb");
         assert_eq!(tidy_lyrics("[Verse]\na\n[Chorus]\nb"), "[Verse]\na\n\n[Chorus]\nb");
         assert_eq!(fallback_title("compose a hindi song"), "Compose a hindi song");
+    }
+}
+
+#[cfg(test)]
+mod live {
+    use super::*;
+    use crate::settings::LlmProvider;
+
+    /// `CADENZA_LLM_URL=http://127.0.0.1:8080 cargo test live -- --ignored --nocapture`:
+    /// writes a few songs with a running OpenAI-compatible server.
+    #[tokio::test]
+    #[ignore]
+    async fn writes_tags_and_lyrics() {
+        let settings = Settings {
+            llm_provider: LlmProvider::OpenAi,
+            openai_url: std::env::var("CADENZA_LLM_URL").expect("CADENZA_LLM_URL"),
+            openai_model: "local".into(),
+            ..Settings::default()
+        };
+        let briefs = [
+            ("compose a hindi song for my 3 years old son. his name is babu singh and he loves music and he goes to nursery and likes painting", "auto", None),
+            ("meeting again in the monsoon rain after five years", "auto", Some("bollywood-romantic")),
+            ("a song about finding peace at dawn", "Hindi (Devanagari)", Some("sufi")),
+            ("driving through a neon city at midnight", "auto", Some("pop")),
+        ];
+        for (description, language, preset) in briefs {
+            let brief = Brief { description, lyrics: "", title: "", language, instrumental: false, duration: 120.0, preset: preset.and_then(styles::find) };
+            let written = write(&settings, &brief).await.unwrap();
+            println!("=== {description}\nTITLE {}\nSTYLE {}\n{}\nSECTIONS {:?}\n", written.title, written.style, written.lyrics, styles::score_sections(&written.lyrics));
+            assert!(written.style.contains(','), "tags, not prose: {}", written.style);
+        }
     }
 }

@@ -9,6 +9,7 @@ mod library;
 mod llm;
 mod settings;
 mod songwriter;
+mod styles;
 mod system;
 
 use std::path::PathBuf;
@@ -355,6 +356,11 @@ fn audio_extensions() -> Vec<&'static str> {
     audio::EXTENSIONS.to_vec()
 }
 
+#[tauri::command]
+fn style_presets() -> Vec<styles::Preset> {
+    styles::PRESETS.to_vec()
+}
+
 #[derive(Serialize)]
 struct LlmStatus {
     ready: bool,
@@ -507,7 +513,7 @@ pub fn run() {
             get_settings, save_settings, system_info,
             catalog, download_start, download_cancel, model_delete, storage_info, remove_all_models,
             engine_status, engine_start, engine_stop, engine_log, llm_test, ollama_models,
-            create_song, write_lyrics, llm_status, download_required, audio_info, audio_extensions, cancel_job, list_jobs, dismiss_job,
+            create_song, write_lyrics, llm_status, download_required, audio_info, audio_extensions, style_presets, cancel_job, list_jobs, dismiss_job,
             list_tracks, track_audio, update_track, delete_track, export_track, track_file_name, library_dir,
         ])
         .build(tauri::generate_context!())

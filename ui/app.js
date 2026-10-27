@@ -124,9 +124,11 @@ try { savedTheme = localStorage.getItem("cadenza-theme") || "auto"; } catch {}
 const IDEAS = [
   "compose a hindi song for my 3 years old son. his name is babu singh and he loves music and he goes to nursery and likes painting",
   "an upbeat 80s synth-pop anthem about driving through a neon city at midnight, female vocals",
+  "a Bollywood romantic song about meeting again in the monsoon rain, soft male vocals, strings and tabla",
   "a warm acoustic folk ballad about my grandmother's kitchen on Sunday mornings",
+  "a Sufi song about finding peace at a dargah at dawn, harmonium and hand claps, powerful male vocals",
   "lo-fi hip hop study beat with soft piano and vinyl crackle, instrumental",
-  "a Bollywood style romantic duet about meeting again in the monsoon rain",
+  "a Hindi lori for my baby daughter Anaya, about the moon and the stars watching over her",
   "epic orchestral rock song for a marathon finish line, male vocals, huge choir",
   "a cheerful birthday song for my best friend Maya who loves cats and coffee",
   "a Spanish reggaeton summer track about dancing on the beach until sunrise",
@@ -146,6 +148,9 @@ const form = {
   variations: $("#variations"),
   steps: $("#steps"),
   temperature: $("#temperature"),
+  preset: $("#preset"),
+  cfgScale: $("#cfgScale"),
+  guideScore: $("#guideScore"),
   lmSeed: $("#lmSeed"),
   seed: $("#seed"),
 };
@@ -180,6 +185,28 @@ $$(".tabs .tab[data-tab]").forEach((tab) =>
     form.description.placeholder = cover ? "jazz funk with a female singer and a horn section" : IDEAS[0];
   })
 );
+
+// ------------------------------------------------------------------ genres
+
+const STYLE_PLACEHOLDER = form.style.placeholder;
+
+async function loadPresets() {
+  state.presets = await invoke("style_presets");
+  const groups = new Map();
+  for (const p of state.presets) {
+    if (!groups.has(p.group)) groups.set(p.group, []);
+    groups.get(p.group).push(`<option value="${esc(p.id)}">${esc(p.label)}</option>`);
+  }
+  form.preset.insertAdjacentHTML("beforeend", [...groups].map(([group, options]) => `<optgroup label="${esc(group)}">${options.join("")}</optgroup>`).join(""));
+}
+
+form.preset.addEventListener("change", () => {
+  const preset = (state.presets || []).find((p) => p.id === form.preset.value);
+  const hint = $("#presetHint");
+  hint.hidden = !preset;
+  hint.textContent = preset ? `Sounds like: ${preset.tags}. Sung in ${preset.language} (change it under Advanced).` : "";
+  form.style.placeholder = preset ? `From the genre: ${preset.tags}` : STYLE_PLACEHOLDER;
+});
 
 // ------------------------------------------------------------------ remake
 
@@ -301,6 +328,9 @@ function readRequest() {
     steps: Number(form.steps.value),
     variations: Number(form.variations.value),
     temperature: Number(form.temperature.value) === 1 ? null : Number(form.temperature.value),
+    preset: form.preset.value,
+    cfg_scale: form.cfgScale.value ? Number(form.cfgScale.value) : null,
+    guide_score: form.guideScore.checked,
     lm_seed: number(form.lmSeed),
     seed: number(form.seed),
     cover_audio: state.tab === "cover" ? state.coverPath : null,
@@ -1205,7 +1235,7 @@ listen("engine-log", (line) => {
   try {
     [state.settings, state.system] = await Promise.all([invoke("get_settings"), invoke("system_info")]);
     state.jobs = await invoke("list_jobs");
-    await Promise.all([refreshCatalog(), refreshEngine(), loadTracks()]);
+    await Promise.all([refreshCatalog(), refreshEngine(), loadTracks(), loadPresets()]);
     const ready = state.engine.state !== "no_engine" && state.engine.state !== "no_models";
     show(ready ? "create" : "home");
   } catch (e) {

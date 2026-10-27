@@ -98,6 +98,12 @@
             </div>
 
             <div class="field">
+              <div class="label-row"><label for="preset">Genre</label><span class="opt">Optional</span></div>
+              <select id="preset"><option value="">Let the model choose from the description</option></select>
+              <p class="hint" id="presetHint" hidden></p>
+            </div>
+
+            <div class="field">
               <div class="label-row"><label for="description" id="descLabel">Description</label><span class="req" id="descReq">Required</span></div>
               <div class="textarea-wrap">
                 <textarea id="description" rows="5" maxlength="500" placeholder="compose a hindi song for my 3 years old son. his name is babu singh and he loves music and he goes to nursery and likes painting"></textarea>
@@ -140,9 +146,9 @@
                   <label for="language">Lyrics language</label>
                   <select id="language">
                     <option value="auto">From the description</option>
-                    <option>English</option><option>Hindi</option><option>Chinese</option><option>Japanese</option>
+                    <option>English</option><option value="Hindi">Hindi (Roman letters, sings best)</option><option>Hindi (Devanagari)</option><option>Chinese</option><option>Japanese</option>
                     <option>Korean</option><option>Spanish</option><option>French</option><option>German</option>
-                    <option>Portuguese</option><option>Russian</option><option>Italian</option><option>Punjabi</option>
+                    <option>Portuguese</option><option>Russian</option><option>Italian</option><option>Punjabi</option><option>Punjabi (Gurmukhi)</option>
                     <option>Bengali</option><option>Tamil</option><option>Urdu</option><option>Arabic</option>
                   </select>
                 </div>
@@ -169,6 +175,17 @@
                 <div class="field">
                   <label for="temperature">Creativity <span class="value" id="temperatureValue">1.00</span></label>
                   <input id="temperature" type="range" min="0.6" max="1.4" step="0.05" value="1.0" />
+                </div>
+                <div class="field">
+                  <label for="cfgScale">Style strength</label>
+                  <select id="cfgScale">
+                    <option value="">Normal</option>
+                    <option value="1.2">Strong (follows the style closer, about 2× slower)</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="guideScore">Score guidance</label>
+                  <label class="check"><input type="checkbox" id="guideScore" checked /> Varied chords, sections in lyric order</label>
                 </div>
                 <div class="field">
                   <label for="lmSeed">Composition seed</label>

@@ -101,6 +101,12 @@
     audio_info: () => ({ name: "Monsoon Demo.m4a", duration: 214.6, missing: { cover: ["sheetsage-q8", "mert-q8"], continue: ["tokenizer-q8", "mert-q8"] } }),
     llm_status: () => ({ ready: true, provider: "builtin", model: "Gemma 4 E4B IT · QAT q4_0", fallback: false }),
     download_required: () => [],
+    style_presets: () => [
+      { id: "pop", group: "Hollywood / English", label: "Pop", language: "English", tags: "modern pop, catchy, upbeat, bright synths, punchy drums, electric bass, clean electric guitar, polished female vocals, 112 bpm, English" },
+      { id: "love-ballad", group: "Hollywood / English", label: "Love ballad", language: "English", tags: "pop ballad, romantic, heartfelt, piano, acoustic guitar, lush strings, soft drums, warm male vocals, 72 bpm, English" },
+      { id: "bollywood-romantic", group: "Bollywood / Indian", label: "Bollywood romantic", language: "Hindi", tags: "Bollywood romantic, filmi, emotional, soft male vocals, acoustic guitar, lush strings, piano, tabla, bansuri flute, 84 bpm, Hindi" },
+      { id: "sufi", group: "Bollywood / Indian", label: "Sufi", language: "Hindi", tags: "Sufi, devotional, spiritual, harmonium, tabla, hand claps, qawwali chorus, powerful male vocals, 96 bpm, Hindi" },
+    ],
     storage_info: () => ({
       data_dir: "~/Library/Application Support/app.cadenza.studio",
       models_dir: "~/Library/Application Support/app.cadenza.studio/models",
@@ -120,7 +126,7 @@
   // Stage the scene once the app has booted.
   window.addEventListener("load", () => setTimeout(async () => {
     const click = (sel) => document.querySelector(sel)?.click();
-    if (scene !== "create" && scene !== "remake") click(`.nav button[data-view="${scene === "drawer" ? "library" : scene}"]`);
+    if (!["create", "remake", "genre"].includes(scene)) click(`.nav button[data-view="${scene === "drawer" ? "library" : scene}"]`);
     if (scene === "remake") {
       emit("tauri://drag-drop", { paths: ["/Users/me/Music/Monsoon Demo.m4a"] });
       setTimeout(() => {
@@ -129,9 +135,14 @@
         document.querySelector("#description").dispatchEvent(new Event("input"));
       }, 200);
     }
-    if (scene === "create") {
+    if (scene === "create" || scene === "genre") {
       document.querySelector("#description").value = tracks[0].description;
       document.querySelector("#description").dispatchEvent(new Event("input"));
+    }
+    if (scene === "genre") {
+      document.querySelector("#preset").value = "bollywood-romantic";
+      document.querySelector("#preset").dispatchEvent(new Event("change"));
+      document.querySelector("#advanced").open = true;
     }
     if (scene === "home") document.querySelector("#heroPrompt").value = "A Hindi lullaby for my 3-year-old son Babu, who loves painting and music";
     click(`[data-play="${tracks[0].id}"]`);

@@ -16,6 +16,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::library::{self, Track};
 use crate::settings::{LlmProvider, Settings};
 use crate::songwriter::{self, Brief, Written};
+use crate::styles;
 use crate::AppState;
 
 #[derive(Debug, Clone, Serialize)]
@@ -60,6 +61,15 @@ pub struct SongRequest {
     pub variations: u32,
     #[serde(default)]
     pub temperature: Option<f32>,
+    /// A genre preset (styles.rs), "" for none.
+    #[serde(default)]
+    pub preset: String,
+    /// Text guidance on the semantic stage; None keeps the protocol value.
+    #[serde(default)]
+    pub cfg_scale: Option<f32>,
+    /// Steer a planned score: varied chords, sections in lyric order.
+    #[serde(default = "yes")]
+    pub guide_score: bool,
     /// Remakes: the recording the new version is made from.
     #[serde(default)]
     pub cover_audio: Option<String>,
@@ -83,6 +93,7 @@ fn default_duration() -> f32 { 180.0 }
 fn default_cot() -> String { "full".into() }
 fn default_steps() -> u32 { 32 }
 fn one() -> u32 { 1 }
+fn yes() -> bool { true }
 fn default_remake() -> String { "cover".into() }
 fn minus_one() -> f32 { -1.0 }
 
@@ -327,6 +338,7 @@ async fn run(app: &AppHandle, id: &str, request: SongRequest, cancel: &AtomicBoo
             language: &request.language,
             instrumental: request.instrumental,
             duration: request.duration,
+            preset: styles::find(&request.preset),
         };
         let mut written = cancellable(cancel, songwriter::write(&llm_settings, &brief)).await?;
         if has_style {
@@ -334,10 +346,15 @@ async fn run(app: &AppHandle, id: &str, request: SongRequest, cancel: &AtomicBoo
         }
         written
     } else if has_lyrics {
-        // No language model: the description itself is a fine style caption.
+        // No language model: the preset's tags, else the description itself.
+        let style = match styles::find(&request.preset) {
+            _ if has_style => request.style.trim().to_string(),
+            Some(preset) => preset.tags.to_string(),
+            None => request.description.trim().to_string(),
+        };
         Written {
             title: if request.title.trim().is_empty() { songwriter::fallback_title(&request.description) } else { request.title.trim().into() },
-            style: if has_style { request.style.trim().into() } else { request.description.trim().into() },
+            style,
             lyrics: if request.instrumental { songwriter::INSTRUMENTAL_LYRICS.into() } else { songwriter::tidy_lyrics(&request.lyrics) },
         }
     } else {
@@ -413,6 +430,21 @@ async fn run(app: &AppHandle, id: &str, request: SongRequest, cancel: &AtomicBoo
     if let Some(temperature) = request.temperature {
         body["semantic_sampling"] = json!({ "temperature": temperature.clamp(0.1, 2.0) });
     }
+    if let Some(cfg) = request.cfg_scale {
+        body["cfg_scale"] = json!(cfg.clamp(1.0, 2.0));
+    }
+    // The model plans its own score here. Left alone it tends to loop one
+    // chord progression all song; the engine's harmony pass varies the
+    // chords and lays the sections out in the order the lyrics sing them.
+    if request.guide_score && abc.is_empty() && source_tokens.is_empty() && body["cot"] != "off" {
+        body["plan_retries"] = json!(4);
+        let mut harmony = json!({ "strength": 4.0, "section_strength": 4.0 });
+        let sections = styles::score_sections(&written.lyrics);
+        if !sections.is_empty() {
+            harmony["follow"] = json!(sections);
+        }
+        body["harmony"] = harmony;
+    }
     let kind = request.kind();
     sing(app, id, &settings, body, &written, &request, kind, None, cancel).await
 }
@@ -483,6 +515,7 @@ pub async fn write_only(app: &AppHandle, request: SongRequest) -> Result<Written
         language: &request.language,
         instrumental: false,
         duration: request.duration,
+        preset: styles::find(&request.preset),
     };
     songwriter::write(&settings, &brief).await
 }
