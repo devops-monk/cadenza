@@ -6,7 +6,11 @@
 
 **Describe a song. Get a full song with vocals, made on your own machine.**
 
-Rust + Tauri desktop app · YuE2 music model via yue2.cpp (Metal / CUDA) · lyrics by a local LLM
+Rust + Tauri desktop app · YuE2 music model via yue2.cpp (Metal / Vulkan) · lyrics by a local LLM
+
+[**Website**](https://cadenza.devops-monk.com) · [**Download**](https://github.com/devops-monk/cadenza/releases/latest)
+
+<img src="site/images/app-create.png" alt="Cadenza: describe a song, watch it being composed, play it" width="900" />
 
 </div>
 
@@ -26,6 +30,23 @@ computer, and you can make as many songs as you like.
 - **Models**: every size of every model, with resumable downloads, SHA-256 checks and recommendations based on your RAM.
 - **Any language model**: built-in llama.cpp with Gemma 4 (E4B up to 12B Q8), Ollama, or any OpenAI-compatible server.
 - **Light and dark themes.**
+
+## Screenshots
+
+| | |
+|---|---|
+| <img src="site/images/app-home.png" alt="Home: a prompt box with ideas" /> | <img src="site/images/app-lyrics.png" alt="A song's Hindi lyrics, with play, variation and save" /> |
+| **Home**: type an idea and press Create | **Every song keeps its recipe**: lyrics, style, score, prompt |
+| <img src="site/images/app-library.png" alt="Library with search and favourites" /> | <img src="site/images/app-models.png" alt="Models page with every size and a download in progress" /> |
+| **Library**: search, favourites, Save as… | **Models**: every size, recommended for your machine |
+| <img src="site/images/app-create-dark.png" alt="Create screen in dark mode" /> | <img src="site/images/app-settings.png" alt="Settings: built-in llama.cpp, Ollama or any OpenAI-compatible server" /> |
+| **Dark mode** | **Settings**: built-in model, Ollama or any server |
+
+## Download
+
+Grab the installer for your system from [Releases](https://github.com/devops-monk/cadenza/releases/latest):
+`.dmg` for macOS (Apple Silicon), `-setup.exe` / `.msi` for Windows, `.AppImage` / `.deb` for Linux.
+On macOS, if the app is reported as damaged (it isn't notarised yet), run `xattr -cr /Applications/Cadenza.app` once.
 
 ## Run it
 
