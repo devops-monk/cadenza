@@ -19,8 +19,11 @@ server=$!
 sleep 1
 
 mkdir -p "$root/site/images"
+# `capture.sh app-genres` retakes only the named shots
+only=" $* "
 shot() {
     local scene="$1" name="$2" size="${3:-1440,900}"
+    [ "$only" = "  " ] || [[ "$only" == *" $name "* ]] || return 0
     "$chrome" --headless=new --disable-gpu --hide-scrollbars --force-device-scale-factor=2 \
         --autoplay-policy=no-user-gesture-required --window-size="$size" \
         --virtual-time-budget=5000 --screenshot="$root/site/images/$name.png" \
@@ -30,6 +33,7 @@ shot() {
 shot create app-create
 shot create,dark app-create-dark
 shot remake app-remake
+shot genre app-genres
 shot library app-library
 shot drawer app-lyrics
 shot models app-models

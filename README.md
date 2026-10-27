@@ -22,6 +22,8 @@ computer, and you can make as many songs as you like.
 ## Features
 
 - **Song**: a description is enough. Lyrics, the instrumental toggle, the title and every engine setting are optional.
+- **Genres**: 10 Hollywood/English and 12 Bollywood/Indian presets (pop, love ballad, rock, hip hop, Bollywood romantic and dance, Sufi, ghazal, bhangra, bhajan, lori and more). Each sets the style tags YuE2 reads best and guides the lyric writer. Hindi, Punjabi and Urdu lyrics are written in Roman letters by default, Devanagari or Gurmukhi on request.
+- **Guided scores**: the planned score varies its chords instead of looping one progression, and its sections follow the lyrics.
 - **✦ Write lyrics**: fills the lyrics, title and style from the description so you can edit them before making the song.
 - **Remake a Song**: drop in an MP3, WAV, FLAC, M4A, OGG or AIFF and get a new version of it:
   - *Same melody, new style*: SheetSage2 transcribes the melody to a score and YuE2 sings it again in the style you describe.

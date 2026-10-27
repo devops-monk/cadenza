@@ -22,6 +22,7 @@
       <nav class="nav-links">
         <a href="#features">Features</a>
         <a href="#how">How it works</a>
+        <a href="#genres">Genres</a>
         <a href="#remake">Remake</a>
         <a href="#models">Models</a>
         <a href="#privacy">Privacy</a>
@@ -90,7 +91,7 @@
         <article class="tile reveal-up">
           <div class="tile-big">20+</div>
           <h3>Languages.</h3>
-          <p>English, Hindi, Chinese, Japanese, Korean, Spanish, Punjabi and more — written in their own script.</p>
+          <p>English, Hindi, Punjabi, Urdu, Chinese, Japanese, Korean, Spanish and more. Indian languages are written the way the model sings them best.</p>
         </article>
         <article class="tile tile-grad reveal-up">
           <div class="tile-icon">✦</div>
@@ -175,9 +176,38 @@
       </div>
     </section>
 
+    <!-- GENRES -->
+    <section class="section" id="genres">
+      <p class="eyebrow center">New in 0.1.5</p>
+      <h2 class="center">Hollywood or Bollywood.<br /><span class="grad">Pick a genre.</span></h2>
+      <div class="step reveal-up">
+        <div class="step-text">
+          <h3>22 genres, tuned for the model.</h3>
+          <p>Choose a genre and Cadenza knows the sound: the instruments, the tempo, the voice. The lyric writer knows the craft, from a Bollywood hook that comes back after every verse to the rhymed couplets of a ghazal.</p>
+          <div class="genre-group">
+            <p class="genre-head">Hollywood / English</p>
+            <ul class="genre-list">
+              <li>Pop</li><li>Love ballad</li><li>Rock anthem</li><li>Hip hop</li><li>R&amp;B soul</li>
+              <li>Dance / EDM</li><li>Country</li><li>Acoustic folk</li><li>Jazz</li><li>Kids song</li>
+            </ul>
+          </div>
+          <div class="genre-group">
+            <p class="genre-head">Bollywood / Indian</p>
+            <ul class="genre-list">
+              <li>Bollywood romantic</li><li>Bollywood dance</li><li>Sad Hindi song</li><li>Sufi</li><li>Ghazal</li>
+              <li>Punjabi bhangra</li><li>Hindi indie pop</li><li>Desi hip hop</li><li>Bhajan</li><li>Lori</li>
+              <li>Kids song (Hindi)</li><li>Indian classical fusion</li>
+            </ul>
+          </div>
+          <p class="small-note">Better songs out of the box: styles are written as the short tags YuE2 was trained on, the score varies its chords instead of looping one progression, and the song's sections follow your lyrics.</p>
+        </div>
+        <div class="shot"><img src="images/app-genres.png" alt="The Create tab with the Bollywood romantic genre chosen and the sound it brings: filmi, soft male vocals, strings, tabla, bansuri flute, 84 bpm" loading="lazy" /></div>
+      </div>
+    </section>
+
     <!-- REMAKE -->
     <section class="section" id="remake">
-      <p class="eyebrow center">New in 0.1.4</p>
+      <p class="eyebrow center">Remake</p>
       <h2 class="center">Bring a song.<br /><span class="grad">Get a new version.</span></h2>
       <div class="step reveal-up">
         <div class="step-text">
@@ -280,6 +310,7 @@
         <details><summary>Is it really free?</summary><p>Yes. Cadenza is open source and everything runs on your own computer, so there's nothing to pay for and no limit on how many songs you make.</p></details>
         <details><summary>How long does a song take?</summary><p>It depends on your hardware and the song length. On an Apple M1 Pro, expect a few minutes for a three-minute song. Variations of a song you've already made are much faster.</p></details>
         <details><summary>What do I need?</summary><p>A Mac with Apple silicon, or a Windows or Linux PC with a recent GPU and at least 16&nbsp;GB of memory. About 10&nbsp;GB of free disk space for the models.</p></details>
+        <details><summary>How do I get the best Hindi songs?</summary><p>Pick a Bollywood or Indian genre and describe the song in English or Hindi. Lyrics are written in Roman letters (<i>"Tum hi ho"</i>), which the music model sings more clearly than Devanagari; if you prefer Devanagari, choose it under Advanced → Lyrics language. Make two or three variations and keep the best.</p></details>
         <details><summary>Can I sell the music I make?</summary><p>No, not with the default model. The YuE2 weights are licensed CC BY-NC 4.0, which means non-commercial use only. Personal songs, gifts, family videos and experiments are all fine.</p></details>
         <details><summary>Can I use a bigger language model?</summary><p>Yes. Pick a larger Gemma size in Models, or switch to Ollama or any OpenAI-compatible server in Settings and use any model you like, up to 70B on a big machine.</p></details>
         <details><summary>macOS says the app is damaged.</summary><p>The app isn't notarised yet. Move it to Applications and run <code>xattr -cr /Applications/Cadenza.app</code> once in Terminal, then open it.</p></details>

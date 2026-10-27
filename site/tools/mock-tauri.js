@@ -140,9 +140,10 @@
       document.querySelector("#description").dispatchEvent(new Event("input"));
     }
     if (scene === "genre") {
+      document.querySelector("#description").value = "meeting again in the monsoon rain after five years apart";
+      document.querySelector("#description").dispatchEvent(new Event("input"));
       document.querySelector("#preset").value = "bollywood-romantic";
       document.querySelector("#preset").dispatchEvent(new Event("change"));
-      document.querySelector("#advanced").open = true;
     }
     if (scene === "home") document.querySelector("#heroPrompt").value = "A Hindi lullaby for my 3-year-old son Babu, who loves painting and music";
     click(`[data-play="${tracks[0].id}"]`);

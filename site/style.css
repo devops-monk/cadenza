@@ -130,6 +130,10 @@ h4 { font-size: 19px; margin: 0 0 6px; letter-spacing: -.02em; }
 .remake-modes { list-style: none; padding: 0; margin: 18px 0; display: grid; gap: 14px; }
 .remake-modes li { color: var(--muted); font-size: 17px; padding-left: 18px; border-left: 3px solid; border-image: var(--grad) 1; }
 .remake-modes b { color: var(--text); }
+.genre-group { margin: 18px 0; }
+.genre-head { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+.genre-list { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.genre-list li { font-size: 14px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line, rgba(127,127,127,.25)); color: var(--text); }
 .small-note { font-size: 15px !important; }
 .shot { border-radius: 16px; overflow: hidden; box-shadow: 0 30px 70px -20px rgba(30, 20, 60, .3), 0 0 0 1px rgba(0, 0, 0, .06); }
 
