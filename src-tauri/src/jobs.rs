@@ -134,6 +134,10 @@ fn update(app: &AppHandle, id: &str, change: impl FnOnce(&mut Job)) {
 
 fn stage(app: &AppHandle, id: &str, stage: &str, detail: &str) {
     update(app, id, |job| {
+        // A job cancelled before its first stage stays cancelled; it stops at its next check.
+        if job.state == "cancelled" {
+            return;
+        }
         job.state = "running".into();
         job.stage = stage.into();
         job.detail = detail.into();
@@ -500,22 +504,33 @@ async fn sing(app: &AppHandle, id: &str, settings: &Settings, body: Value, writt
     Ok(ids)
 }
 
+/// The cancel key of the lyrics writer, which holds the pipeline like a song
+/// does: `cancel` with this id frees it for the songs queued behind it.
+pub const WRITER_ID: &str = "write-lyrics";
+
 /// Lyrics (and a style) for the form, without making the song.
 pub async fn write_only(app: &AppHandle, request: SongRequest) -> Result<Written> {
     let state = app.state::<AppState>();
     let Some(settings) = resolve_llm(app, &state.settings()).await else {
         bail!("download a language model (Models) or start Ollama first");
     };
-    let _turn = state.pipeline.lock().await;
-    ensure_llm(app, &settings).await?;
-    let brief = Brief {
-        description: &request.description,
-        lyrics: "",
-        title: &request.title,
-        language: &request.language,
-        instrumental: false,
-        duration: request.duration,
-        preset: styles::find(&request.preset),
-    };
-    songwriter::write(&settings, &brief).await
+    let cancel = Arc::new(AtomicBool::new(false));
+    state.cancels.lock().unwrap().insert(WRITER_ID.into(), cancel.clone());
+    let result = cancellable(&cancel, async {
+        let _turn = state.pipeline.lock().await;
+        ensure_llm(app, &settings).await?;
+        let brief = Brief {
+            description: &request.description,
+            lyrics: "",
+            title: &request.title,
+            language: &request.language,
+            instrumental: false,
+            duration: request.duration,
+            preset: styles::find(&request.preset),
+        };
+        songwriter::write(&settings, &brief).await
+    })
+    .await;
+    state.cancels.lock().unwrap().remove(WRITER_ID);
+    result
 }

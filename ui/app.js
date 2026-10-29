@@ -373,14 +373,25 @@ form.description.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) createSong(readRequest());
 });
 
+// While writing, the same button cancels; the writer holds the song queue.
+let writing = false;
+let stopWriting = false;
 $("#writeLyrics").addEventListener("click", async () => {
   const button = $("#writeLyrics");
+  if (writing) {
+    stopWriting = true;
+    invoke("cancel_job", { id: "write-lyrics" }).catch((error) => toast(`Could not cancel: ${error}`, true));
+    return;
+  }
   const request = readRequest();
   if (!request.description) return formError("Describe the song first, then let the model write the lyrics.");
   formError("");
-  button.disabled = true;
+  writing = true;
+  stopWriting = false;
   const label = button.innerHTML;
-  button.innerHTML = `<span class="spark">✦</span> Writing…`;
+  const title = button.title;
+  button.innerHTML = `<span class="spark">✦</span> Writing… cancel`;
+  button.title = "Stop writing lyrics";
   try {
     const written = await invoke("write_lyrics", { request });
     form.lyrics.value = written.lyrics;
@@ -389,9 +400,12 @@ $("#writeLyrics").addEventListener("click", async () => {
     $("#advanced").open = true;
     toast("Lyrics written — edit anything you like, then Create.");
   } catch (error) {
-    formError(String(error));
+    if (stopWriting) toast("Stopped writing lyrics");
+    else formError(String(error));
   } finally {
+    writing = false;
     button.innerHTML = label;
+    button.title = title;
     updateCounters();
   }
 });
@@ -553,7 +567,7 @@ document.addEventListener("click", (e) => {
   else if (d.cancel) invoke("cancel_job", { id: d.cancel }).then((job) => {
     if (job) upsertJob(job);
     else { state.jobs = state.jobs.filter((j) => j.id !== d.cancel); renderSession(); }
-  });
+  }).catch((error) => toast(`Could not cancel: ${error}`, true));
   else if (d.dismiss) {
     invoke("dismiss_job", { id: d.dismiss });
     state.jobs = state.jobs.filter((j) => j.id !== d.dismiss);
