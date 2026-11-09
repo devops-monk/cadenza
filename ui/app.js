@@ -237,6 +237,10 @@ async function chooseRecording(path) {
     $("#sourceStart").value = 0;
     $("#sourceEnd").value = Math.min(30, max);
     updateSection();
+    // Rounded up to the slider's step, so the end of the song is not cut off.
+    const step = Number(form.duration.step);
+    form.duration.value = Math.min(Number(form.duration.max), Math.ceil(info.duration / step) * step);
+    updateCounters();
   } catch (error) {
     state.coverPath = null;
     state.coverInfo = null;
