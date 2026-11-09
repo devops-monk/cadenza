@@ -2,6 +2,7 @@
 
 mod audio;
 mod catalog;
+mod cover;
 mod downloads;
 mod engine;
 mod jobs;
@@ -473,6 +474,24 @@ fn export_track(state: State<AppState>, id: String, destination: String) -> Comm
 }
 
 #[tauri::command]
+fn set_track_cover(state: State<AppState>, id: String, image: String) -> CommandResult<library::Track> {
+    state.library.lock().unwrap().set_cover(&id, std::path::Path::new(&image)).map(|t| library::Track { replay: serde_json::Value::Null, ..t }).map_err(err)
+}
+
+#[tauri::command]
+fn track_cover(state: State<AppState>, id: String) -> CommandResult<tauri::ipc::Response> {
+    let library = state.library.lock().unwrap();
+    let track = library.get(&id).ok_or("no such track")?;
+    Ok(tauri::ipc::Response::new(cover::read(&library.path_of(track)).map_err(err)?))
+}
+
+#[tauri::command]
+fn add_cover_to_file(source: String, image: String, destination: String) -> CommandResult<()> {
+    use std::path::Path;
+    cover::embed(Path::new(&source), Path::new(&image), Path::new(&destination)).map_err(err)
+}
+
+#[tauri::command]
 fn track_file_name(state: State<AppState>, id: String) -> CommandResult<String> {
     let library = state.library.lock().unwrap();
     let track = library.get(&id).ok_or("no such track")?;
@@ -514,7 +533,7 @@ pub fn run() {
             catalog, download_start, download_cancel, model_delete, storage_info, remove_all_models,
             engine_status, engine_start, engine_stop, engine_log, llm_test, ollama_models,
             create_song, write_lyrics, llm_status, download_required, audio_info, audio_extensions, style_presets, cancel_job, list_jobs, dismiss_job,
-            list_tracks, track_audio, update_track, delete_track, export_track, track_file_name, library_dir,
+            list_tracks, track_audio, update_track, delete_track, export_track, track_file_name, library_dir, set_track_cover, track_cover, add_cover_to_file,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Cadenza")

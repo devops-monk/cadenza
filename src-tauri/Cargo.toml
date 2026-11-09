@@ -31,6 +31,7 @@ uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde", "clock"] }
 sysinfo = { version = "0.33", default-features = false, features = ["system"] }
 symphonia = { version = "0.5", default-features = false, features = ["all"] }
+id3 = "1"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

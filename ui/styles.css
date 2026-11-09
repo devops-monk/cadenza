@@ -386,3 +386,6 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   .player-inner { grid-template-columns: auto auto minmax(0, 1fr) auto; }
   .now, .player-tools input[type="range"] { display: none; }
 }
+
+/* ------------------------------------------------------------- covers */
+.art img, .drawer-art img, .disc img { width: 100%; height: 100%; object-fit: cover; display: block; }

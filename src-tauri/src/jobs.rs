@@ -492,6 +492,7 @@ async fn sing(app: &AppHandle, id: &str, settings: &Settings, body: Value, writt
             format,
             duration,
             favorite: false,
+            cover: false,
             lm_seed: replay.get("lm_seed").and_then(Value::as_i64),
             seed: replay.get("seed").and_then(Value::as_i64),
             parent_id: parent_id.clone(),

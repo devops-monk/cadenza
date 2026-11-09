@@ -14,6 +14,7 @@ const dialog = {
 const reveal = (path) => (T.opener ? T.opener.revealItemInDir(path) : invoke("plugin:opener|reveal_item_in_dir", { paths: [path] }));
 
 const state = {
+  coverArt: new Map(), // track id -> object URL of its embedded image
   view: "create",
   tab: "song",
   coverPath: null,
@@ -68,6 +69,12 @@ function hash(text) {
 }
 
 /** Deterministic cover art: two-hue gradient with soft rings and a wave. */
+// A track's embedded cover when it has one, else its generated art.
+function artOf(track) {
+  const url = state.coverArt.get(track.id);
+  return url ? `<img src="${url}" alt="" />` : artSvg(track.id);
+}
+
 function artSvg(seed) {
   const h = hash(seed);
   const a = h % 360;
@@ -443,7 +450,7 @@ function trackRow(track) {
   const playing = state.current && state.current.id === track.id;
   const meta = [kindLabel(track.kind), track.duration ? fmtTime(track.duration) : null, new Date(track.created_at).toLocaleDateString()].filter(Boolean).join(" · ");
   return `<div class="track ${playing ? "playing" : ""}" data-track="${track.id}">
-    <div class="art">${artSvg(track.id)}</div>
+    <div class="art">${artOf(track)}</div>
     <div class="track-text" data-open="${track.id}"><strong>${esc(track.title)}</strong><span>${esc(meta)}</span></div>
     <div class="track-actions">
       <button class="icon-btn ${track.favorite ? "on" : ""}" data-fav="${track.id}" title="Favourite"><svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.6 4.5c2.1 0 3.6 1.2 4.4 2.6.8-1.4 2.3-2.6 4.4-2.6 3.6 0 5.7 3.9 4.2 7.3C19.5 16.4 12 21 12 21z"/></svg></button>
@@ -473,10 +480,62 @@ setInterval(() => {
 
 async function loadTracks() {
   state.tracks = await invoke("list_tracks");
+  await Promise.all(state.tracks.filter((t) => t.cover && !state.coverArt.has(t.id)).map(loadCover));
   renderSession();
   if (state.view === "library") renderLibrary();
   if (state.view === "home") renderHome();
 }
+
+async function loadCover(track) {
+  try {
+    const bytes = new Uint8Array(await invoke("track_cover", { id: track.id }));
+    const type = bytes[0] === 0x89 ? "image/png" : "image/jpeg";
+    if (state.coverArt.has(track.id)) URL.revokeObjectURL(state.coverArt.get(track.id));
+    state.coverArt.set(track.id, URL.createObjectURL(new Blob([bytes], { type })));
+  } catch {
+    // The generated art stands in.
+  }
+}
+
+const COVER_IMAGE_FILTER = [{ name: "Image", extensions: ["jpg", "jpeg", "png"] }];
+const pickedPath = (picked) => (typeof picked === "string" ? picked : picked?.path);
+const chooseCoverImage = async () => pickedPath(await dialog.open({ multiple: false, directory: false, filters: COVER_IMAGE_FILTER }));
+
+async function setTrackCover(track) {
+  const image = await chooseCoverImage();
+  if (!image) return;
+  try {
+    Object.assign(track, await invoke("set_track_cover", { id: track.id, image }));
+    await loadCover(track);
+    if (state.drawerTrack === track) paintDrawerCover(track);
+    refreshTrackViews();
+    toast("Cover added. Save as… to get the MP3 with it.");
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
+function paintDrawerCover(track) {
+  $("#drawerArt").innerHTML = artOf(track);
+  $("#drawerCover").textContent = track.cover ? "Change cover…" : "Add cover…";
+  $("#drawerCover").hidden = !!track.format?.startsWith("wav");
+}
+
+// Any MP3 from disk: the original stays as it is, the result is a new file.
+$("#coverFile").addEventListener("click", async () => {
+  const source = pickedPath(await dialog.open({ multiple: false, directory: false, filters: [{ name: "MP3", extensions: ["mp3"] }] }));
+  if (!source) return;
+  const image = await chooseCoverImage();
+  if (!image) return;
+  const destination = await dialog.save({ defaultPath: source.replace(/\.mp3$/i, "") + " (with cover).mp3", filters: [{ name: "MP3", extensions: ["mp3"] }] });
+  if (!destination) return;
+  try {
+    await invoke("add_cover_to_file", { source, image, destination });
+    toast("Saved the MP3 with its cover");
+  } catch (e) {
+    toast(String(e), true);
+  }
+});
 
 function filteredTracks() {
   const q = state.search.toLowerCase();
@@ -586,7 +645,7 @@ function openDrawer(id) {
   const track = state.tracks.find((t) => t.id === id);
   if (!track) return;
   state.drawerTrack = track;
-  $("#drawerArt").innerHTML = artSvg(track.id);
+  paintDrawerCover(track);
   $("#drawerTitle").value = track.title;
   const meta = [kindLabel(track.kind), track.duration ? fmtTime(track.duration) : null, new Date(track.created_at).toLocaleString(), track.backbone?.replace("yue-", "YuE2 ").toUpperCase()].filter(Boolean);
   $("#drawerMeta").textContent = meta.join(" · ");
@@ -631,6 +690,7 @@ $("#drawerTitle").addEventListener("change", async (e) => {
   refreshTrackViews();
 });
 $("#drawerPlay").addEventListener("click", () => state.drawerTrack && playTrack(state.drawerTrack.id, state.tracks.map((t) => t.id)));
+$("#drawerCover").addEventListener("click", () => state.drawerTrack && setTrackCover(state.drawerTrack));
 $("#drawerSave").addEventListener("click", () => state.drawerTrack && saveTrack(state.drawerTrack.id));
 $("#drawerDelete").addEventListener("click", () => state.drawerTrack && deleteTrack(state.drawerTrack.id));
 $("#drawerVariation").addEventListener("click", async () => {
@@ -777,7 +837,7 @@ function updatePlayerMeta() {
   const t = state.current;
   $("#playerTitle").textContent = t ? t.title : "Nothing playing";
   $("#playerKind").textContent = t ? kindLabel(t.kind) : "—";
-  $("#playerArt").innerHTML = t ? artSvg(t.id) : "";
+  $("#playerArt").innerHTML = t ? artOf(t) : "";
   $("#favBtn").classList.toggle("on", !!(t && t.favorite));
   $("#playIcon").setAttribute("d", audio.paused ? "M8 5v14l11-7z" : "M7 5h4v14H7zM13 5h4v14h-4z");
   $("#player").classList.toggle("playing", !audio.paused);

@@ -27,6 +27,9 @@ pub struct Track {
     pub duration: f64,
     #[serde(default)]
     pub favorite: bool,
+    /// An image is embedded in the MP3.
+    #[serde(default)]
+    pub cover: bool,
     #[serde(default)]
     pub lm_seed: Option<i64>,
     #[serde(default)]
@@ -81,6 +84,16 @@ impl Library {
             track.favorite = favorite;
         }
         let updated = track.clone();
+        self.save()?;
+        Ok(updated)
+    }
+
+    pub fn set_cover(&mut self, id: &str, image: &Path) -> Result<Track> {
+        let index = self.tracks.iter().position(|track| track.id == id).context("no such track")?;
+        let path = self.path_of(&self.tracks[index]);
+        crate::cover::embed(&path, image, &path)?;
+        self.tracks[index].cover = true;
+        let updated = self.tracks[index].clone();
         self.save()?;
         Ok(updated)
     }
