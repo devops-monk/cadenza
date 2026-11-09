@@ -221,3 +221,22 @@ h4 { font-size: 19px; margin: 0 0 6px; letter-spacing: -.02em; }
   .window { margin-top: 44px; border-radius: 10px; }
   .typed-card { padding: 22px; border-radius: 22px; }
 }
+
+/* --------------------------------------------------------- example songs */
+.songs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.song { display: grid; grid-template-columns: 56px minmax(0, 1fr); grid-template-rows: 1fr auto; gap: 16px 14px; align-items: center; padding: 22px; border-radius: 20px; background: var(--bg); border: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.song-play { width: 56px; height: 56px; padding: 0; border: 0; border-radius: 50%; background: var(--grad); cursor: pointer; display: grid; place-items: center; transition: transform .2s, filter .2s; }
+.song-play:hover { transform: scale(1.06); filter: brightness(1.06); }
+.song-play:focus-visible, .song-seek:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.song-play span { display: block; width: 0; height: 0; margin-left: 4px; border-style: solid; border-width: 10px 0 10px 17px; border-color: transparent transparent transparent #fff; }
+.song.playing .song-play span { width: 16px; height: 20px; margin-left: 0; border-width: 0 5px; border-color: transparent #fff; }
+.song-text { min-width: 0; }
+.song-text strong { display: block; font-size: 18px; line-height: 1.25; letter-spacing: -.02em; }
+.song-text span { display: block; margin-top: 3px; font-size: 14px; color: var(--muted); }
+.song-bar { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; }
+.song-seek { flex: 1; min-width: 0; margin: 0; accent-color: var(--blue); cursor: pointer; }
+.song-seek:disabled { cursor: default; opacity: .55; }
+.song-time { flex: none; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.song.failed .song-time { color: #d70015; }
+@media (max-width: 900px) { .songs { grid-template-columns: minmax(0, 1fr); gap: 14px; } }
+.songs-cta { display: flex; justify-content: center; margin-top: 44px; }

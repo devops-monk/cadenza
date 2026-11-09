@@ -1,4 +1,4 @@
-// Cadenza website: scroll reveals, the typing demo, and download links that
+// Cadenza website: scroll reveals, the typing demo, example songs, and download links that
 // point at the right file of the latest GitHub release.
 
 // The GitHub repository whose Releases hold the installers.
@@ -44,6 +44,70 @@ const demoObserver = new IntersectionObserver((entries) => {
   if (entries.some((e) => e.isIntersecting)) { demoObserver.disconnect(); runDemo(); }
 });
 demoObserver.observe(document.querySelector(".typed-card"));
+
+// -------------------------------------------------------- example songs
+const songs = [...document.querySelectorAll(".song")];
+const player = new Audio();
+player.preload = "none";
+let activeSong = null;
+
+const clock = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+const songLength = (song) => player.duration || Number(song.dataset.duration);
+
+function paintSongs() {
+  for (const song of songs) {
+    const playing = song === activeSong && !player.paused;
+    song.classList.toggle("playing", playing);
+    const title = song.querySelector("strong").textContent;
+    song.querySelector(".song-play").setAttribute("aria-label", `${playing ? "Pause" : "Play"} ${title}`);
+  }
+}
+
+function resetSong(song) {
+  song.querySelector(".song-seek").value = 0;
+  song.querySelector(".song-seek").disabled = true;
+  song.querySelector(".song-time").textContent = clock(Number(song.dataset.duration));
+}
+
+function playSong(song) {
+  if (song === activeSong) {
+    if (player.paused) player.play().catch(songFailed);
+    else player.pause();
+    return;
+  }
+  if (activeSong) resetSong(activeSong);
+  activeSong = song;
+  song.classList.remove("failed");
+  song.querySelector(".song-seek").disabled = false;
+  player.src = song.dataset.src;
+  player.play().catch(songFailed);
+}
+
+function songFailed(error) {
+  if (error?.name === "AbortError" || !activeSong) return;
+  activeSong.classList.add("failed");
+  activeSong.querySelector(".song-time").textContent = "Could not play";
+}
+
+for (const song of songs) {
+  song.querySelector(".song-play").addEventListener("click", () => playSong(song));
+  song.querySelector(".song-seek").addEventListener("input", (e) => {
+    if (song === activeSong) player.currentTime = (e.target.value / 1000) * songLength(song);
+  });
+}
+player.addEventListener("play", paintSongs);
+player.addEventListener("pause", paintSongs);
+player.addEventListener("error", () => songFailed());
+player.addEventListener("timeupdate", () => {
+  if (!activeSong) return;
+  activeSong.querySelector(".song-seek").value = (player.currentTime / songLength(activeSong)) * 1000;
+  activeSong.querySelector(".song-time").textContent = clock(player.currentTime);
+});
+player.addEventListener("ended", () => {
+  resetSong(activeSong);
+  activeSong = null;
+  paintSongs();
+});
 
 // ----------------------------------------------------------- downloads
 const links = { mac: document.querySelector('[data-os="mac"]'), windows: document.querySelector('[data-os="windows"]'), linux: document.querySelector('[data-os="linux"]') };
