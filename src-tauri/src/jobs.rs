@@ -422,7 +422,8 @@ async fn run(app: &AppHandle, id: &str, request: SongRequest, cancel: &AtomicBoo
     }
     if !source_tokens.is_empty() {
         let start = request.source_start.max(0.0);
-        let end = if request.source_end > start { request.source_end } else { -1.0 };
+        // The engine stops a song at 6:00; the section leaves 20 s of that to write.
+        let end = if request.source_end > start { request.source_end.min(start + 340.0) } else { -1.0 };
         body["source_tokens"] = json!(source_tokens);
         body["source_start"] = json!(start);
         body["source_end"] = json!(end);

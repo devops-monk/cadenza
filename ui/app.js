@@ -262,12 +262,19 @@ $$("#remakeSeg [data-remake]").forEach((b) =>
   })
 );
 
+// A song is at most 6:00 and at least 20 s of it must be new.
+const MAX_SECTION_SECONDS = 340;
+
 function updateSection(changed) {
   const start = $("#sourceStart");
   const end = $("#sourceEnd");
   if (Number(end.value) <= Number(start.value)) {
     if (changed === start) end.value = Math.min(Number(end.max), Number(start.value) + 1);
     else start.value = Math.max(0, Number(end.value) - 1);
+  }
+  if (Number(end.value) - Number(start.value) > MAX_SECTION_SECONDS) {
+    if (changed === start) end.value = Number(start.value) + MAX_SECTION_SECONDS;
+    else start.value = Number(end.value) - MAX_SECTION_SECONDS;
   }
   $("#sourceStartValue").textContent = fmtTime(Number(start.value));
   $("#sourceEndValue").textContent = fmtTime(Number(end.value));
