@@ -81,41 +81,30 @@
     <section class="section soft" id="listen">
       <p class="eyebrow center">Made with Cadenza</p>
       <h2 class="center">Hear it <span class="grad">for yourself.</span></h2>
-      <p class="lead center">Three songs made on a laptop, exactly as the app saved them.</p>
-      <div class="songs reveal-up">
-        <article class="song" data-src="audio/shayad-kabhi-na-keh-sakoon.mp3" data-duration="180">
-          <button class="song-play" type="button" aria-label="Play Shayad Kabhi Na Keh Sakoon"><span aria-hidden="true"></span></button>
-          <div class="song-text">
-            <strong>Shayad Kabhi Na Keh Sakoon</strong>
-            <span>Hindi · Sad Hindi song</span>
+      <p class="lead center">Four songs made on a laptop, exactly as the app saved them.</p>
+      <div class="sp reveal-up" id="songPlayer">
+        <div class="sp-stage">
+          <div class="sp-art"></div>
+          <div class="sp-info">
+            <p class="sp-about"></p>
+            <h3 class="sp-title"></h3>
+            <div class="sp-wave">
+              <div class="sp-bars"></div>
+              <div class="sp-bars sp-played"></div>
+              <input class="sp-seek" type="range" min="0" max="1000" value="0" />
+            </div>
+            <div class="sp-times"><time class="sp-now">0:00</time><time class="sp-total"></time></div>
+            <div class="sp-controls">
+              <button class="sp-btn sp-prev" type="button" aria-label="Previous song"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2.4v14H6zM20 5v14L9.5 12z"/></svg></button>
+              <button class="sp-btn sp-play" type="button" aria-label="Play">
+                <svg class="sp-icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+                <svg class="sp-icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+              </button>
+              <button class="sp-btn sp-next" type="button" aria-label="Next song"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.6 5H18v14h-2.4zM4 5v14l10.5-7z"/></svg></button>
+            </div>
           </div>
-          <div class="song-bar">
-            <input class="song-seek" type="range" min="0" max="1000" value="0" disabled aria-label="Position in Shayad Kabhi Na Keh Sakoon" />
-            <time class="song-time">3:00</time>
-          </div>
-        </article>
-        <article class="song" data-src="audio/baarish-mein-tum-milte.mp3" data-duration="180">
-          <button class="song-play" type="button" aria-label="Play Baarish Mein Tum Milte"><span aria-hidden="true"></span></button>
-          <div class="song-text">
-            <strong>Baarish Mein Tum Milte</strong>
-            <span>Hindi · Bollywood romantic</span>
-          </div>
-          <div class="song-bar">
-            <input class="song-seek" type="range" min="0" max="1000" value="0" disabled aria-label="Position in Baarish Mein Tum Milte" />
-            <time class="song-time">3:00</time>
-          </div>
-        </article>
-        <article class="song" data-src="audio/my-happy-little-three.mp3" data-duration="165">
-          <button class="song-play" type="button" aria-label="Play My Happy Little Three"><span aria-hidden="true"></span></button>
-          <div class="song-text">
-            <strong>My Happy Little Three</strong>
-            <span>English · Kids song</span>
-          </div>
-          <div class="song-bar">
-            <input class="song-seek" type="range" min="0" max="1000" value="0" disabled aria-label="Position in My Happy Little Three" />
-            <time class="song-time">2:45</time>
-          </div>
-        </article>
+        </div>
+        <ol class="sp-list"></ol>
       </div>
       <div class="songs-cta">
         <a class="btn btn-primary" href="#download">Make your own song</a>
