@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>How Cadenza works — Architecture</title>
+  <meta name="description" content="How Cadenza turns one sentence into a finished song on your own computer: the language model, the YuE2 music engine, the processes, the GPU and the files." />
+  <meta name="theme-color" content="#000000" />
+  <meta property="og:title" content="How Cadenza works" />
+  <meta property="og:description" content="From one sentence to a finished song, entirely on your own computer. Every step, explained." />
+  <meta property="og:image" content="https://cadenza.devops-monk.com/images/og.png" />
+  <meta property="og:url" content="https://cadenza.devops-monk.com/architecture.html" />
+  <link rel="icon" type="image/png" href="images/icon-64.png" />
+  <link rel="apple-touch-icon" href="images/icon-256.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="nav" id="nav">
+    <div class="nav-inner">
+      <a class="nav-brand" href="index.html"><img src="images/icon-64.png" alt="" width="22" height="22" />Cadenza</a>
+      <nav class="nav-links">
+        <a href="index.html#listen">Listen</a>
+        <a href="index.html#features">Features</a>
+        <a href="index.html#how">How it works</a>
+        <a href="architecture.html" aria-current="page">Architecture</a>
+        <a href="index.html#faq">FAQ</a>
+        <a href="https://github.com/devops-monk/cadenza">GitHub</a>
+      </nav>
+      <a class="nav-cta" href="index.html#download">Download</a>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- HERO -->
+    <section class="hero arch-hero">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <p class="eyebrow reveal">Architecture</p>
+      <h1 class="reveal">Under the hood.</h1>
+      <p class="lead reveal">One sentence goes in. A finished song with vocals comes out. Here is every step in between,
+        all of it running on your own computer.</p>
+      <div class="arch-toc reveal">
+        <a href="#journey">The journey</a><a href="#system">The system</a><a href="#stages">The stages</a><a href="#gpu">The GPU</a><a href="#remakes">Remakes</a><a href="#disk">Your disk</a><a href="#c4">C4 model</a><a href="#sequence">Sequence</a>
+      </div>
+    </section>
+
+    <!-- 1. JOURNEY -->
+    <section class="section" id="journey">
+      <p class="eyebrow center">1 · The journey</p>
+      <h2 class="center">From a sentence<br /><span class="grad">to a song.</span></h2>
+      <p class="lead center">Two models share the work. A language model writes the words. YuE2, a 3-billion-parameter music model, composes and sings them.</p>
+
+      <ol class="flow reveal-up" aria-label="How a description becomes a song">
+        <li class="flow-node">
+          <span class="flow-icon" style="--c1:#8e8e93;--c2:#48484a"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h13"/></svg></span>
+          <strong>You</strong>
+          <span class="flow-where">Cadenza window</span>
+          <p>A description, in any language. Lyrics and a genre are optional.</p>
+        <span class="flow-out">→ description</span>
+        </li>
+        <li class="flow-edge" aria-hidden="true"></li>
+        <li class="flow-node">
+          <span class="flow-icon" style="--c1:#ffb048;--c2:#ff7a3d"><svg viewBox="0 0 24 24"><path d="M5 19l2-6L17 3l4 4-10 10-6 2zM14 6l4 4"/></svg></span>
+          <strong>Songwriter</strong>
+          <span class="flow-where">Gemma 4 · llama.cpp</span>
+          <p>Writes a title, style tags and lyrics marked <code>[Verse]</code>, <code>[Chorus]</code>, <code>[Bridge]</code>.</p>
+        <span class="flow-out">→ lyrics + style</span>
+        </li>
+        <li class="flow-edge" aria-hidden="true"></li>
+        <li class="flow-node">
+          <span class="flow-icon" style="--c1:#ff4d8d;--c2:#d63384"><svg viewBox="0 0 24 24"><path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg></span>
+          <strong>Composer</strong>
+          <span class="flow-where">YuE2 · writing half</span>
+          <p>Writes a score with melody and chords, then the song as codes: 25 per second.</p>
+        <span class="flow-out">→ score + codes</span>
+        </li>
+        <li class="flow-edge" aria-hidden="true"></li>
+        <li class="flow-node">
+          <span class="flow-icon" style="--c1:#a259ff;--c2:#7c5cff"><svg viewBox="0 0 24 24"><path d="M3 12h2l2-6 3 12 3-9 2 6 2-3h4"/></svg></span>
+          <strong>Performer</strong>
+          <span class="flow-where">YuE2 · painting half</span>
+          <p>Turns the codes into sound by flow matching: noise refined, step by step, into every frame at once.</p>
+        <span class="flow-out">→ latents</span>
+        </li>
+        <li class="flow-edge" aria-hidden="true"></li>
+        <li class="flow-node">
+          <span class="flow-icon" style="--c1:#2997ff;--c2:#0071e3"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4V5zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg></span>
+          <strong>Sound</strong>
+          <span class="flow-where">YuE2 VAE decoder</span>
+          <p>Decodes 48 kHz stereo audio, saved as an MP3 in your library.</p>
+          <span class="flow-out">→ MP3</span>
+        </li>
+      </ol>
+      <p class="caption">The score travels with every song. Open a track in the app to read its lyrics, style and score.</p>
+    </section>
+
+    <!-- 2. SYSTEM -->
+    <section class="section soft" id="system">
+      <p class="eyebrow center">2 · The system</p>
+      <h2 class="center">Three programs.<br /><span class="grad">One computer.</span></h2>
+      <p class="lead center">Cadenza is a desktop app that starts two local servers and talks to them over your own machine's loopback address. Nothing listens to the outside world.</p>
+
+      <div class="sys reveal-up">
+        <div class="sys-app">
+          <div class="sys-label">Cadenza.app · Tauri 2</div>
+          <div class="sys-row">
+            <div class="sys-box">
+              <h4>Interface</h4>
+              <p>HTML, CSS and JavaScript in the system web view: Create, Library, Models, Settings and the player.</p>
+            </div>
+            <div class="sys-bridge" aria-label="Commands and events">
+              <span>commands →</span>
+              <span>← events</span>
+            </div>
+            <div class="sys-box">
+              <h4>Core · Rust</h4>
+              <p>Runs one song at a time, supervises both servers, and owns the files.</p>
+              <ul class="chips">
+                <li>jobs</li><li>engine</li><li>llm</li><li>songwriter</li><li>library</li><li>downloads</li><li>audio</li><li>cover</li><li>settings</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="sys-links" aria-hidden="true">
+          <span class="sys-link">HTTP</span>
+          <span class="sys-link">HTTP</span>
+        </div>
+
+        <div class="sys-row sys-servers">
+          <div class="sys-box sys-music">
+            <h4>yue-server</h4>
+            <p class="sys-sub">yue2.cpp on GGML · Metal, Vulkan or CUDA</p>
+            <code class="sys-port">127.0.0.1:18087</code>
+            <p>The music engine. Holds YuE2 and its VAE, plus the remake models when you have them. Takes a job by <code>POST /synth</code>, reports progress, returns the audio.</p>
+          </div>
+          <div class="sys-box sys-words">
+            <h4>llama-server</h4>
+            <p class="sys-sub">llama.cpp · Gemma 4, E4B up to 12B</p>
+            <code class="sys-port">127.0.0.1:18088</code>
+            <p>The songwriter. Or use Ollama, or any OpenAI-compatible server you run, such as LM Studio.</p>
+          </div>
+        </div>
+
+        <div class="sys-links sys-links-disk" aria-hidden="true"><span class="sys-link">reads and writes</span></div>
+
+        <div class="sys-row sys-disk">
+          <div class="sys-box sys-file">
+            <h4>Models folder</h4>
+            <p>The weights, as GGUF files. Downloaded once, then used offline.</p>
+          </div>
+          <div class="sys-box sys-file">
+            <h4>Library folder</h4>
+            <p>Your songs as MP3, and <code>index.json</code> with each song's lyrics, style, score and seeds.</p>
+          </div>
+          <div class="sys-box sys-net">
+            <h4>Hugging Face</h4>
+            <p>Where models come from: resumable downloads, the YuE2 files checked against SHA-256. Otherwise Cadenza stays offline, unless you point it at a remote server.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. STAGES -->
+    <section class="section" id="stages">
+      <p class="eyebrow center">3 · The stages</p>
+      <h2 class="center">What you see,<br /><span class="grad">and what happens.</span></h2>
+      <p class="lead center">Each song is a job. These are the stages its card shows while you wait, and the work behind each one.</p>
+
+      <ol class="stages reveal-up">
+        <li>
+          <span class="stage-num">1</span>
+          <div>
+            <h3>Writing lyrics</h3>
+            <p>The Rust core starts <code>llama-server</code> with your Gemma model, or uses Ollama or another server, and asks for a title, style tags and lyrics as JSON. Skipped when you bring your own lyrics and style.</p>
+          </div>
+        </li>
+        <li>
+          <span class="stage-num">2</span>
+          <div>
+            <h3>Starting the music engine</h3>
+            <p>On computers under 32&nbsp;GB of memory the language model is stopped first by default, so the two never fill memory together. Then <code>yue-server</code> starts with YuE2 and its VAE.</p>
+          </div>
+        </li>
+        <li class="stage-optional">
+          <span class="stage-num">+</span>
+          <div>
+            <h3>Listening to the recording <small>remakes only</small></h3>
+            <p>Your recording is turned into a score or into YuE2's codes. See <a href="#remakes">Remakes</a>.</p>
+          </div>
+        </li>
+        <li>
+          <span class="stage-num">3</span>
+          <div>
+            <h3>Composing &amp; singing</h3>
+            <p>One request to the engine: write the score, write the codes, paint the sound, decode the audio. The core polls the engine and shows its progress.</p>
+          </div>
+        </li>
+        <li>
+          <span class="stage-num">4</span>
+          <div>
+            <h3>Saving</h3>
+            <p>The engine returns the audio with the recipe that made it. Both go to your library, ready to play, rename, save or remake.</p>
+          </div>
+        </li>
+      </ol>
+      <p class="caption">One song is made at a time; the next waits its turn. Cancel stops a job at its next step.</p>
+    </section>
+
+    <!-- 4. GPU -->
+    <section class="section dark" id="gpu">
+      <p class="eyebrow center">4 · The GPU</p>
+      <h2 class="center">One model, two halves,<br /><span class="grad">taking turns.</span></h2>
+      <p class="lead center">YuE2 is one transformer with two halves that share a memory of everything written so far: the KV cache. To fit a 16&nbsp;GB laptop, only one part sits on the GPU at a time.</p>
+
+      <div class="gpu-lane reveal-up" role="img" aria-label="Over time, the GPU holds the writing half, then the painting half, then the VAE decoder, while the KV cache stays through the first two">
+        <div class="gpu-head"><span>GPU memory</span><span>time →</span></div>
+        <div class="gpu-track">
+          <div class="gpu-part gpu-ar"><strong>Writing half</strong><span>score, then codes, one token at a time</span></div>
+          <div class="gpu-part gpu-nar"><strong>Painting half</strong><span>all frames together, by flow matching</span></div>
+          <div class="gpu-part gpu-vae"><strong>VAE</strong><span>audio, 1920 samples per frame</span></div>
+        </div>
+        <div class="gpu-track gpu-track-cache">
+          <div class="gpu-cache"><strong>KV cache</strong><span>stays put, so the painting half reads what the writing half left and nothing is computed twice</span></div>
+        </div>
+      </div>
+
+      <div class="facts reveal-up">
+        <div><b>25</b><span>codes per second of music</span></div>
+        <div><b>6:00</b><span>longest song: 9,000 codes</span></div>
+        <div><b>48 kHz</b><span>stereo output</span></div>
+        <div><b>0</b><span>models kept on the GPU between songs, under 32&nbsp;GB</span></div>
+      </div>
+      <p class="caption">With 32&nbsp;GB of memory or more, Cadenza keeps everything loaded instead, for faster songs back to back.</p>
+    </section>
+
+    <!-- 5. REMAKES -->
+    <section class="section" id="remakes">
+      <p class="eyebrow center">5 · Remakes and variations</p>
+      <h2 class="center">Start from a song<br /><span class="grad">you already have.</span></h2>
+      <p class="lead center">Two extra models listen to a recording so YuE2 can sing it again. Both hear it through MERT-v2, an encoder trained on music.</p>
+
+      <div class="lanes reveal-up">
+        <div class="lane">
+          <h3>Same melody, new style</h3>
+          <ol class="lane-steps">
+            <li>Your recording</li>
+            <li>MERT-v2 + SheetSage2</li>
+            <li class="lane-key">A score of its melody</li>
+            <li>YuE2 sings it in your style</li>
+          </ol>
+        </div>
+        <div class="lane">
+          <h3>Continue from a section</h3>
+          <ol class="lane-steps">
+            <li>A part of your recording</li>
+            <li>MERT-v2 + realaudio tokenizer</li>
+            <li class="lane-key">YuE2's own codes</li>
+            <li>The new song opens with it, then carries on</li>
+          </ol>
+        </div>
+        <div class="lane">
+          <h3>New variation</h3>
+          <ol class="lane-steps">
+            <li>A song you made</li>
+            <li>Its stored codes</li>
+            <li class="lane-key">A new sound seed</li>
+            <li>Only the painting half and VAE run again</li>
+          </ol>
+        </div>
+      </div>
+      <p class="caption">A variation keeps the composition and the singing and changes the sound, in a fraction of the time.</p>
+    </section>
+
+    <!-- 6. DISK -->
+    <section class="section soft" id="disk">
+      <p class="eyebrow center">6 · Your disk</p>
+      <h2 class="center">Everything it needs,<br /><span class="grad">downloaded once.</span></h2>
+      <p class="lead center">The recommended set for a 16&nbsp;GB Mac. Cadenza suggests sizes for your computer's memory, and every model comes in lighter and fuller versions.</p>
+
+      <div class="disk reveal-up">
+        <div class="disk-row"><span class="disk-dot" style="--c:#ff4d8d"></span><strong>YuE2 3B · Q6_K</strong><span>composes and sings</span><b>2.9 GB</b></div>
+        <div class="disk-row"><span class="disk-dot" style="--c:#2997ff"></span><strong>YuE2 VAE</strong><span>turns latents into audio</span><b>0.53 GB</b></div>
+        <div class="disk-row"><span class="disk-dot" style="--c:#a259ff"></span><strong>Companion adapter</strong><span>a decoder LoRA for cleaner audio</span><b>0.14 GB</b></div>
+        <div class="disk-row"><span class="disk-dot" style="--c:#ffb048"></span><strong>Gemma 4 E4B + llama.cpp</strong><span>writes lyrics, title and style</span><b>5.2 GB</b></div>
+        <div class="disk-row disk-opt"><span class="disk-dot" style="--c:#8e8e93"></span><strong>For remakes</strong><span>MERT-v2, SheetSage2, realaudio tokenizer</span><b>1.1 GB</b></div>
+      </div>
+
+      <ul class="stack reveal-up" aria-label="Built with">
+        <li>Rust</li><li>Tauri 2</li><li>yue2.cpp</li><li>GGML</li><li>llama.cpp</li><li>Metal</li><li>Vulkan</li><li>CUDA</li><li>Symphonia</li>
+      </ul>
+    </section>
+
+    <!-- 7. C4 -->
+    <section class="section" id="c4">
+      <p class="eyebrow center">7 · For architects and developers</p>
+      <h2 class="center">The C4 model.<br /><span class="grad">Three levels of zoom.</span></h2>
+      <p class="lead center">The same system as standard C4 diagrams: who uses it, which processes run, and what sits inside the Rust core.</p>
+
+      <div class="c4-legend" aria-label="Legend">
+        <span><i class="lg-person"></i>Person</span><span><i class="lg-system"></i>Software system</span><span><i class="lg-container"></i>Container</span><span><i class="lg-component"></i>Component</span><span><i class="lg-store"></i>Files</span><span><i class="lg-ext"></i>External</span><span><i class="lg-line"></i>Calls</span><span><i class="lg-ret"></i>Replies, events</span>
+      </div>
+
+      <div class="diagram-head"><h3>Level 1 · System context</h3><p>Cadenza and the people and systems around it.</p></div>
+      <div class="diagram reveal-up"><!-- diagram:context --><svg class="d" viewBox="0 0 1000 350" role="img" aria-labelledby="c4l1-t"><title id="c4l1-t">C4 level 1, system context: a song maker uses Cadenza, which downloads models from Hugging Face and can ask your own LLM server for lyrics; the app itself comes from GitHub Releases.</title><defs><marker id="c4l1-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="d-head" d="M0 0 10 5 0 10z"/></marker></defs><rect class="d-person" x="380" y="10" width="240" height="110" rx="14"/><text class="d-title d-on-person" x="500.0" y="36" text-anchor="middle">Song maker</text><text class="d-tech d-on-person" x="500.0" y="53" text-anchor="middle">[Person]</text><text class="d-desc d-on-person" x="500.0" y="77" text-anchor="middle">Describes a song, listens,</text><text class="d-desc d-on-person" x="500.0" y="93" text-anchor="middle">saves and remakes it</text><rect class="d-ext" x="740" y="10" width="240" height="110" rx="14"/><text class="d-title d-on-ext" x="860.0" y="36" text-anchor="middle">GitHub Releases</text><text class="d-tech d-on-ext" x="860.0" y="53" text-anchor="middle">[External system]</text><text class="d-desc d-on-ext" x="860.0" y="77" text-anchor="middle">Installers for macOS,</text><text class="d-desc d-on-ext" x="860.0" y="93" text-anchor="middle">Windows and Linux</text><rect class="d-system" x="380" y="220" width="240" height="120" rx="14"/><text class="d-title d-on-system" x="500.0" y="246" text-anchor="middle">Cadenza</text><text class="d-tech d-on-system" x="500.0" y="263" text-anchor="middle">[Software system]</text><text class="d-desc d-on-system" x="500.0" y="287" text-anchor="middle">Writes, composes and sings</text><text class="d-desc d-on-system" x="500.0" y="303" text-anchor="middle">songs on the user&#x27;s computer</text><rect class="d-ext" x="20" y="220" width="240" height="120" rx="14"/><text class="d-title d-on-ext" x="140.0" y="246" text-anchor="middle">Your LLM server</text><text class="d-tech d-on-ext" x="140.0" y="263" text-anchor="middle">[External system, optional]</text><text class="d-desc d-on-ext" x="140.0" y="287" text-anchor="middle">Ollama, LM Studio or any</text><text class="d-desc d-on-ext" x="140.0" y="303" text-anchor="middle">OpenAI-compatible API</text><rect class="d-ext" x="740" y="220" width="240" height="120" rx="14"/><text class="d-title d-on-ext" x="860.0" y="246" text-anchor="middle">Hugging Face</text><text class="d-tech d-on-ext" x="860.0" y="263" text-anchor="middle">[External system]</text><text class="d-desc d-on-ext" x="860.0" y="287" text-anchor="middle">Hosts the model weights</text><text class="d-desc d-on-ext" x="860.0" y="303" text-anchor="middle">at pinned revisions</text><path class="d-line" d="M500 120 L500 218" marker-end="url(#c4l1-a)"/><text class="d-label" x="512" y="174" text-anchor="start">Uses</text><path class="d-line" d="M620 65 L738 65" marker-end="url(#c4l1-a)"/><text class="d-label" x="679" y="57" text-anchor="middle">Installs from</text><path class="d-line" d="M620 280 L738 280" marker-end="url(#c4l1-a)"/><text class="d-label" x="679" y="272" text-anchor="middle">Downloads models</text><text class="d-label d-muted" x="679" y="297" text-anchor="middle">[HTTPS]</text><path class="d-line" d="M380 280 L262 280" marker-end="url(#c4l1-a)"/><text class="d-label" x="321" y="272" text-anchor="middle">Asks for lyrics</text><text class="d-label d-muted" x="321" y="297" text-anchor="middle">[HTTP, optional]</text></svg><!-- /diagram:context --></div>
+
+      <div class="diagram-head"><h3>Level 2 · Containers</h3><p>The processes and stores that make up Cadenza, and how they talk.</p></div>
+      <div class="diagram reveal-up"><!-- diagram:containers --><svg class="d" viewBox="0 0 1110 700" role="img" aria-labelledby="c4l2-t"><title id="c4l2-t">C4 level 2, containers: inside Cadenza, the web UI talks to the Rust core over Tauri IPC; the core runs llama-server and yue-server over HTTP and owns the library and models folders.</title><defs><marker id="c4l2-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="d-head" d="M0 0 10 5 0 10z"/></marker></defs><rect class="d-person" x="50" y="10" width="240" height="90" rx="14"/><text class="d-title d-on-person" x="170.0" y="36" text-anchor="middle">Song maker</text><text class="d-tech d-on-person" x="170.0" y="53" text-anchor="middle">[Person]</text><rect class="d-ext" x="890" y="10" width="200" height="90" rx="14"/><text class="d-title d-on-ext" x="990.0" y="36" text-anchor="middle">Hugging Face</text><text class="d-tech d-on-ext" x="990.0" y="53" text-anchor="middle">[External system]</text><rect class="d-boundary" x="20" y="130" width="850" height="560" rx="18"/><text class="d-blabel" x="38" y="678" text-anchor="start">Cadenza  [Software system]</text><rect class="d-container" x="50" y="160" width="260" height="110" rx="14"/><text class="d-title d-on-container" x="180.0" y="186" text-anchor="middle">Web UI</text><text class="d-tech d-on-container" x="180.0" y="203" text-anchor="middle">[Container: HTML, CSS, JS · web view]</text><text class="d-desc d-on-container" x="180.0" y="227" text-anchor="middle">Create, Library, Models,</text><text class="d-desc d-on-container" x="180.0" y="243" text-anchor="middle">Settings and the player</text><rect class="d-container" x="470" y="160" width="260" height="110" rx="14"/><text class="d-title d-on-container" x="600.0" y="186" text-anchor="middle">Rust core</text><text class="d-tech d-on-container" x="600.0" y="203" text-anchor="middle">[Container: Rust · Tauri 2]</text><text class="d-desc d-on-container" x="600.0" y="227" text-anchor="middle">Runs jobs, supervises both</text><text class="d-desc d-on-container" x="600.0" y="243" text-anchor="middle">servers, owns the files</text><rect class="d-ext" x="890" y="160" width="200" height="110" rx="14"/><text class="d-title d-on-ext" x="990.0" y="186" text-anchor="middle">Your LLM server</text><text class="d-tech d-on-ext" x="990.0" y="203" text-anchor="middle">[External, optional]</text><text class="d-desc d-on-ext" x="990.0" y="227" text-anchor="middle">Ollama or any</text><text class="d-desc d-on-ext" x="990.0" y="243" text-anchor="middle">OpenAI-compatible API</text><rect class="d-container" x="50" y="360" width="260" height="110" rx="14"/><text class="d-title d-on-container" x="180.0" y="386" text-anchor="middle">llama-server</text><text class="d-tech d-on-container" x="180.0" y="403" text-anchor="middle">[Container: C++ · llama.cpp]</text><text class="d-desc d-on-container" x="180.0" y="427" text-anchor="middle">Built-in songwriter: Gemma 4</text><text class="d-desc d-on-container" x="180.0" y="443" text-anchor="middle">OpenAI API on :18088</text><rect class="d-container" x="470" y="360" width="260" height="110" rx="14"/><text class="d-title d-on-container" x="600.0" y="386" text-anchor="middle">yue-server</text><text class="d-tech d-on-container" x="600.0" y="403" text-anchor="middle">[Container: C++ · yue2.cpp, GGML]</text><text class="d-desc d-on-container" x="600.0" y="427" text-anchor="middle">YuE2, VAE and remake models</text><text class="d-desc d-on-container" x="600.0" y="443" text-anchor="middle">HTTP job API on :18087</text><rect class="d-store" x="50" y="550" width="260" height="110" rx="14"/><text class="d-title d-on-store" x="180.0" y="576" text-anchor="middle">Library</text><text class="d-tech d-on-store" x="180.0" y="593" text-anchor="middle">[Container: file system]</text><text class="d-desc d-on-store" x="180.0" y="617" text-anchor="middle">MP3 files and index.json</text><text class="d-desc d-on-store" x="180.0" y="633" text-anchor="middle">with each song&#x27;s recipe</text><rect class="d-store" x="470" y="550" width="260" height="110" rx="14"/><text class="d-title d-on-store" x="600.0" y="576" text-anchor="middle">Models</text><text class="d-tech d-on-store" x="600.0" y="593" text-anchor="middle">[Container: file system]</text><text class="d-desc d-on-store" x="600.0" y="617" text-anchor="middle">GGUF weights and the</text><text class="d-desc d-on-store" x="600.0" y="633" text-anchor="middle">llama.cpp runtime</text><path class="d-line" d="M170 100 L170 158" marker-end="url(#c4l2-a)"/><text class="d-label" x="182" y="134" text-anchor="start">Uses</text><path class="d-line" d="M310 200 L468 200" marker-end="url(#c4l2-a)"/><text class="d-label" x="390" y="192" text-anchor="middle">commands</text><path class="d-line d-ret" d="M470 232 L312 232" marker-end="url(#c4l2-a)"/><text class="d-label d-muted" x="390" y="225" text-anchor="middle">events  [Tauri IPC]</text><path class="d-line" d="M470 248 L390 248 L390 415 L312 415" marker-end="url(#c4l2-a)"/><text class="d-label" x="381" y="332" text-anchor="middle" transform="rotate(-90 381 332)">POST /v1/chat/completions</text><path class="d-line" d="M470 262 L430 262 L430 605 L312 605" marker-end="url(#c4l2-a)"/><text class="d-label" x="421" y="520" text-anchor="middle" transform="rotate(-90 421 520)">writes MP3 + index.json</text><path class="d-line" d="M630 270 L630 358" marker-end="url(#c4l2-a)"/><text class="d-label" x="642" y="312" text-anchor="start">POST /synth, GET /job</text><text class="d-label d-muted" x="642" y="330" text-anchor="start">[HTTP/JSON]</text><path class="d-line" d="M630 470 L630 548" marker-end="url(#c4l2-a)"/><text class="d-label" x="642" y="514" text-anchor="start">loads weights</text><path class="d-line" d="M730 262 L815 262 L815 605 L732 605" marker-end="url(#c4l2-a)"/><text class="d-label" x="806" y="432" text-anchor="middle" transform="rotate(-90 806 432)">saves downloads</text><path class="d-line" d="M700 160 L700 55 L888 55" marker-end="url(#c4l2-a)"/><text class="d-label" x="795" y="47" text-anchor="middle">downloads  [HTTPS]</text><path class="d-line" d="M730 215 L888 215" marker-end="url(#c4l2-a)"/><text class="d-label" x="809" y="207" text-anchor="middle">chat  [HTTP]</text></svg><!-- /diagram:containers --></div>
+
+      <div class="diagram-head"><h3>Level 3 · Components of the Rust core</h3><p>The modules in <code>src-tauri/src</code> and who calls whom.</p></div>
+      <div class="diagram reveal-up"><!-- diagram:components --><svg class="d" viewBox="0 0 1110 640" role="img" aria-labelledby="c4l3-t"><title id="c4l3-t">C4 level 3, components of the Rust core: commands start jobs; jobs use the songwriter, engine client, library and audio reader; the LLM client, engine client and downloads talk to llama-server, yue-server and Hugging Face.</title><defs><marker id="c4l3-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="d-head" d="M0 0 10 5 0 10z"/></marker></defs><rect class="d-container" x="40" y="10" width="210" height="80" rx="14"/><text class="d-title d-on-container" x="145.0" y="36" text-anchor="middle">Web UI</text><text class="d-tech d-on-container" x="145.0" y="53" text-anchor="middle">[Container]</text><rect class="d-boundary" x="12" y="115" width="868" height="510" rx="18"/><text class="d-blabel" x="862" y="138" text-anchor="end">Rust core  [Container: Rust · Tauri 2]</text><rect class="d-component" x="40" y="150" width="210" height="90" rx="14"/><text class="d-title d-on-component" x="145.0" y="176" text-anchor="middle">Commands</text><text class="d-tech d-on-component" x="145.0" y="193" text-anchor="middle">[lib.rs]</text><text class="d-desc d-on-component" x="145.0" y="217" text-anchor="middle">Every call the UI can make</text><rect class="d-component" x="340" y="150" width="220" height="90" rx="14"/><text class="d-title d-on-component" x="450.0" y="176" text-anchor="middle">Jobs</text><text class="d-tech d-on-component" x="450.0" y="193" text-anchor="middle">[jobs.rs]</text><text class="d-desc d-on-component" x="450.0" y="217" text-anchor="middle">Pipeline, stages, queue, cancel</text><rect class="d-component" x="650" y="150" width="210" height="90" rx="14"/><text class="d-title d-on-component" x="755.0" y="176" text-anchor="middle">Engine client</text><text class="d-tech d-on-component" x="755.0" y="193" text-anchor="middle">[engine.rs]</text><text class="d-desc d-on-component" x="755.0" y="217" text-anchor="middle">Starts yue-server, submits, polls</text><rect class="d-component" x="40" y="310" width="210" height="90" rx="14"/><text class="d-title d-on-component" x="145.0" y="336" text-anchor="middle">Library</text><text class="d-tech d-on-component" x="145.0" y="353" text-anchor="middle">[library.rs]</text><text class="d-desc d-on-component" x="145.0" y="377" text-anchor="middle">Tracks on disk + index.json</text><rect class="d-component" x="340" y="310" width="220" height="90" rx="14"/><text class="d-title d-on-component" x="450.0" y="336" text-anchor="middle">Songwriter</text><text class="d-tech d-on-component" x="450.0" y="353" text-anchor="middle">[songwriter.rs]</text><text class="d-desc d-on-component" x="450.0" y="377" text-anchor="middle">Prompt → title, style, lyrics</text><rect class="d-component" x="650" y="310" width="210" height="90" rx="14"/><text class="d-title d-on-component" x="755.0" y="336" text-anchor="middle">LLM client</text><text class="d-tech d-on-component" x="755.0" y="353" text-anchor="middle">[llm.rs]</text><text class="d-desc d-on-component" x="755.0" y="377" text-anchor="middle">llama-server, Ollama, OpenAI</text><rect class="d-component" x="40" y="470" width="210" height="90" rx="14"/><text class="d-title d-on-component" x="145.0" y="496" text-anchor="middle">Cover art</text><text class="d-tech d-on-component" x="145.0" y="513" text-anchor="middle">[cover.rs]</text><text class="d-desc d-on-component" x="145.0" y="537" text-anchor="middle">Embeds images in MP3 (ID3)</text><rect class="d-component" x="340" y="470" width="220" height="90" rx="14"/><text class="d-title d-on-component" x="450.0" y="496" text-anchor="middle">Audio</text><text class="d-tech d-on-component" x="450.0" y="513" text-anchor="middle">[audio.rs]</text><text class="d-desc d-on-component" x="450.0" y="537" text-anchor="middle">Reads recordings for remakes</text><rect class="d-component" x="650" y="470" width="210" height="90" rx="14"/><text class="d-title d-on-component" x="755.0" y="496" text-anchor="middle">Downloads</text><text class="d-tech d-on-component" x="755.0" y="513" text-anchor="middle">[downloads.rs]</text><text class="d-desc d-on-component" x="755.0" y="537" text-anchor="middle">Resumable, SHA-256, unpack</text><rect class="d-container" x="930" y="150" width="170" height="90" rx="14"/><text class="d-title d-on-container" x="1015.0" y="176" text-anchor="middle">yue-server</text><text class="d-tech d-on-container" x="1015.0" y="193" text-anchor="middle">[Container]</text><rect class="d-container" x="930" y="310" width="170" height="90" rx="14"/><text class="d-title d-on-container" x="1015.0" y="336" text-anchor="middle">llama-server</text><text class="d-tech d-on-container" x="1015.0" y="353" text-anchor="middle">[Container]</text><rect class="d-ext" x="930" y="470" width="170" height="90" rx="14"/><text class="d-title d-on-ext" x="1015.0" y="496" text-anchor="middle">Hugging Face</text><text class="d-tech d-on-ext" x="1015.0" y="513" text-anchor="middle">[External system]</text><path class="d-line" d="M145 90 L145 148" marker-end="url(#c4l3-a)"/><text class="d-label" x="157" y="107" text-anchor="start">invoke / events</text><path class="d-line" d="M250 195 L338 195" marker-end="url(#c4l3-a)"/><text class="d-label" x="295" y="187" text-anchor="middle">start, cancel</text><path class="d-line" d="M560 195 L648 195" marker-end="url(#c4l3-a)"/><text class="d-label" x="605" y="187" text-anchor="middle">submit, poll</text><path class="d-line" d="M450 240 L450 308" marker-end="url(#c4l3-a)"/><text class="d-label" x="462" y="279" text-anchor="start">write lyrics</text><path class="d-line" d="M560 355 L648 355" marker-end="url(#c4l3-a)"/><text class="d-label" x="605" y="347" text-anchor="middle">chat</text><path class="d-line" d="M145 240 L145 308" marker-end="url(#c4l3-a)"/><text class="d-label" x="157" y="279" text-anchor="start">list, rename, save</text><path class="d-line" d="M145 400 L145 468" marker-end="url(#c4l3-a)"/><text class="d-label" x="157" y="439" text-anchor="start">embed cover</text><path class="d-line" d="M340 214 L285 214 L285 355 L252 355" marker-end="url(#c4l3-a)"/><text class="d-label" x="277" y="285" text-anchor="middle" transform="rotate(-90 277 285)">save track</text><path class="d-line" d="M340 228 L305 228 L305 515 L338 515" marker-end="url(#c4l3-a)"/><text class="d-label" x="328" y="445" text-anchor="middle" transform="rotate(-90 328 445)">read recording</text><path class="d-line" d="M40 205 L26 205 L26 600 L755 600 L755 562" marker-end="url(#c4l3-a)"/><text class="d-label" x="400" y="592" text-anchor="middle">start and cancel downloads</text><path class="d-line" d="M860 195 L928 195" marker-end="url(#c4l3-a)"/><text class="d-label" x="905" y="187" text-anchor="middle">HTTP</text><path class="d-line" d="M860 355 L928 355" marker-end="url(#c4l3-a)"/><text class="d-label" x="905" y="347" text-anchor="middle">HTTP</text><path class="d-line" d="M860 515 L928 515" marker-end="url(#c4l3-a)"/><text class="d-label" x="905" y="507" text-anchor="middle">HTTPS</text></svg><!-- /diagram:components --></div>
+      <p class="diagram-hint">Scroll a diagram sideways to see all of it.</p>
+    </section>
+
+    <!-- 8. SEQUENCE -->
+    <section class="section soft" id="sequence">
+      <p class="eyebrow center">8 · Sequence</p>
+      <h2 class="center">One song,<br /><span class="grad">message by message.</span></h2>
+      <p class="lead center">Every call between the processes after you press Create, until the first note plays. Names match the code.</p>
+      <div class="diagram reveal-up"><!-- diagram:sequence --><svg class="d" viewBox="0 0 1160 1218" role="img" aria-labelledby="seq-t"><title id="seq-t">Sequence diagram: what happens between the web UI, the Rust core, llama-server, yue-server and the library when you press Create, until the song plays.</title><defs><marker id="seq-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="d-head" d="M0 0 10 5 0 10z"/></marker></defs><line class="d-life" x1="75" y1="64" x2="75" y2="1208"/><rect class="d-person" x="3" y="10" width="144" height="54" rx="14"/><text class="d-title d-on-person" x="75.0" y="36" text-anchor="middle">You</text><line class="d-life" x1="255" y1="64" x2="255" y2="1208"/><rect class="d-container" x="183" y="10" width="144" height="54" rx="14"/><text class="d-title d-on-container" x="255.0" y="36" text-anchor="middle">Web UI</text><line class="d-life" x1="470" y1="64" x2="470" y2="1208"/><rect class="d-container" x="398" y="10" width="144" height="54" rx="14"/><text class="d-title d-on-container" x="470.0" y="36" text-anchor="middle">Rust core</text><line class="d-life" x1="690" y1="64" x2="690" y2="1208"/><rect class="d-container" x="618" y="10" width="144" height="54" rx="14"/><text class="d-title d-on-container" x="690.0" y="36" text-anchor="middle">llama-server</text><line class="d-life" x1="905" y1="64" x2="905" y2="1208"/><rect class="d-container" x="833" y="10" width="144" height="54" rx="14"/><text class="d-title d-on-container" x="905.0" y="36" text-anchor="middle">yue-server</text><line class="d-life" x1="1075" y1="64" x2="1075" y2="1208"/><rect class="d-store" x="1003" y="10" width="144" height="54" rx="14"/><text class="d-title d-on-store" x="1075.0" y="36" text-anchor="middle">Library</text><rect class="d-frame" x="195" y="268" width="555" height="210" rx="8"/><path class="d-tag" d="M195 276a8 8 0 0 1 8-8h57v14l-8 8H195z"/><text class="d-tagtext" x="205" y="284">opt</text><text class="d-label d-muted" x="270" y="284" text-anchor="start">[no lyrics given]</text><rect class="d-frame" x="410" y="514" width="340" height="74" rx="8"/><path class="d-tag" d="M410 522a8 8 0 0 1 8-8h57v14l-8 8H410z"/><text class="d-tagtext" x="420" y="530">opt</text><text class="d-label d-muted" x="485" y="530" text-anchor="start">[free memory: on by default under 32 GB]</text><rect class="d-frame" x="195" y="794" width="770" height="142" rx="8"/><path class="d-tag" d="M195 802a8 8 0 0 1 8-8h64v14l-8 8H195z"/><text class="d-tagtext" x="205" y="810">loop</text><text class="d-label d-muted" x="277" y="810" text-anchor="start">[every 0.7 s until done]</text><path class="d-line" d="M75 108 L251 108" marker-end="url(#seq-a)"/><text class="d-label" x="165.0" y="101" text-anchor="middle">Create: a description</text><path class="d-line" d="M255 142 L466 142" marker-end="url(#seq-a)"/><text class="d-label" x="362.5" y="135" text-anchor="middle">invoke create_song(request)</text><path class="d-line d-ret" d="M470 176 L259 176" marker-end="url(#seq-a)"/><text class="d-label d-muted" x="362.5" y="169" text-anchor="middle">Job { state: queued }</text><path class="d-line" d="M470 210 L504 210 L504 226 L474 226" marker-end="url(#seq-a)"/><text class="d-label" x="514" y="222" text-anchor="start">lock the pipeline: one song at a time</text><path class="d-line" d="M470 314 L259 314" marker-end="url(#seq-a)"/><text class="d-label" x="362.5" y="307" text-anchor="middle">event job: Writing lyrics</text><path class="d-line" d="M470 348 L686 348" marker-end="url(#seq-a)"/><text class="d-label" x="580.0" y="341" text-anchor="middle">start llama-server, if needed</text><path class="d-line" d="M470 382 L686 382" marker-end="url(#seq-a)"/><text class="d-label" x="580.0" y="375" text-anchor="middle">GET /health until ready</text><path class="d-line" d="M470 416 L686 416" marker-end="url(#seq-a)"/><text class="d-label" x="580.0" y="409" text-anchor="middle">POST /v1/chat/completions</text><path class="d-line d-ret" d="M690 450 L474 450" marker-end="url(#seq-a)"/><text class="d-label d-muted" x="580.0" y="443" text-anchor="middle">{ title, style, lyrics } JSON</text><path class="d-line" d="M470 560 L686 560" marker-end="url(#seq-a)"/><text class="d-label" x="580.0" y="553" text-anchor="middle">stop the process</text><path class="d-line" d="M470 612 L259 612" marker-end="url(#seq-a)"/><text class="d-label" x="362.5" y="605" text-anchor="middle">event job: Composing &amp; singing</text><path class="d-line" d="M470 646 L901 646" marker-end="url(#seq-a)"/><text class="d-label" x="687.5" y="639" text-anchor="middle">start yue-server, if needed</text><path class="d-line" d="M470 680 L901 680" marker-end="url(#seq-a)"/><text class="d-label" x="687.5" y="673" text-anchor="middle">GET /health until ready</text><path class="d-line" d="M470 714 L901 714" marker-end="url(#seq-a)"/><text class="d-label" x="687.5" y="707" text-anchor="middle">POST /synth { style, lyrics, cot, duration, seeds }</text><path class="d-line d-ret" d="M905 748 L474 748" marker-end="url(#seq-a)"/><text class="d-label d-muted" x="687.5" y="741" text-anchor="middle">{ id }</text><path class="d-line" d="M470 840 L901 840" marker-end="url(#seq-a)"/><text class="d-label" x="687.5" y="833" text-anchor="middle">GET /job?id</text><path class="d-line d-ret" d="M905 874 L474 874" marker-end="url(#seq-a)"/><text class="d-label d-muted" x="687.5" y="867" text-anchor="middle">{ status }</text><path class="d-line" d="M470 908 L259 908" marker-end="url(#seq-a)"/><text class="d-label" x="362.5" y="901" text-anchor="middle">event engine-log: progress</text><path class="d-line" d="M470 960 L901 960" marker-end="url(#seq-a)"/><text class="d-label" x="687.5" y="953" text-anchor="middle">GET /job?id&amp;result=1</text><path class="d-line d-ret" d="M905 994 L474 994" marker-end="url(#seq-a)"/><text class="d-label d-muted" x="687.5" y="987" text-anchor="middle">multipart: replay JSON + MP3</text><path class="d-line" d="M470 1028 L1071 1028" marker-end="url(#seq-a)"/><text class="d-label" x="772.5" y="1021" text-anchor="middle">write MP3, update index.json</text><path class="d-line" d="M470 1062 L259 1062" marker-end="url(#seq-a)"/><text class="d-label" x="362.5" y="1055" text-anchor="middle">event job: done</text><path class="d-line" d="M255 1096 L466 1096" marker-end="url(#seq-a)"/><text class="d-label" x="362.5" y="1089" text-anchor="middle">invoke track_audio(id)</text><path class="d-line d-ret" d="M470 1130 L259 1130" marker-end="url(#seq-a)"/><text class="d-label d-muted" x="362.5" y="1123" text-anchor="middle">MP3 bytes</text><path class="d-line" d="M255 1164 L79 1164" marker-end="url(#seq-a)"/><text class="d-label" x="165.0" y="1157" text-anchor="middle">plays the song</text></svg><!-- /diagram:sequence --></div>
+      <p class="caption">A remake adds one round trip first: <code>POST /transcribe</code> or <code>POST /tokenize</code>, polled the same way. A variation sends the stored codes back with a new seed.</p>
+    </section>
+
+    <!-- CTA -->
+    <section class="section dark arch-cta">
+      <h2 class="center">Hear it. Then make your own.</h2>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href="index.html#download">Download for free</a>
+        <a class="btn btn-link" href="https://github.com/devops-monk/cadenza">Read the source <span aria-hidden="true">›</span></a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand"><img src="images/icon-64.png" alt="" width="20" height="20" /> Cadenza</div>
+      <p>Built with Rust and Tauri. Music by <a href="https://map-yue2.github.io/">YuE2</a> through <a href="https://github.com/ServeurpersoCom/yue2.cpp">yue2.cpp</a>, lyrics by Gemma through <a href="https://github.com/ggml-org/llama.cpp">llama.cpp</a>.</p>
+      <p class="muted"><a href="index.html">Home</a> · <a href="https://github.com/devops-monk/cadenza">Source code on GitHub</a>. Cadenza is MIT licensed. YuE2 weights are CC BY-NC 4.0 (non-commercial). © 2026 Cadenza.</p>
+    </div>
+  </footer>
+
+  <script>
+    // Scroll reveals, as on the home page.
+    const observer = new IntersectionObserver(
+      (entries) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); observer.unobserve(e.target); } }),
+      { threshold: 0.12, rootMargin: "0px 0px -40px 0px" }
+    );
+    document.querySelectorAll(".reveal, .reveal-up").forEach((el) => observer.observe(el));
+  </script>
+</body>
+</html>
