@@ -181,16 +181,16 @@ def sequence():
             y += 46 if step[0] == "self" else 34
     height = y + 20
     s = Svg("seq", 1160, height, "Sequence diagram: what happens between the web UI, the Rust core, llama-server, yue-server and the library when you press Create, until the song plays.")
-    for lane, title, kind in heads:
-        x = lanes[lane]
-        s.raw(f'<line class="d-life" x1="{x}" y1="64" x2="{x}" y2="{height - 10}"/>')
-        s.box(x - 72, 10, 144, 54, kind, title)
     for (frame, kind, cond, a, b), top, bottom in frames:
         x1, x2 = lanes[a] - 60, lanes[b] + 60
         s.raw(f'<rect class="d-frame" x="{x1}" y="{top}" width="{x2 - x1}" height="{bottom - top}" rx="8"/>')
         s.raw(f'<path class="d-tag" d="M{x1} {top + 8}a8 8 0 0 1 8-8h{36 + 7 * len(kind)}v14l-8 8H{x1}z"/>')
         s.raw(f'<text class="d-tagtext" x="{x1 + 10}" y="{top + 16}">{esc(kind)}</text>')
         s.label(x1 + 54 + 7 * len(kind), top + 16, f"[{cond}]", "start", muted=True)
+    for lane, title, kind in heads:
+        x = lanes[lane]
+        s.raw(f'<line class="d-life" x1="{x}" y1="64" x2="{x}" y2="{height - 10}"/>')
+        s.box(x - 72, 10, 144, 54, kind, title)
     for step, y in rows:
         if step[0] == "self":
             x = lanes[step[1]]
