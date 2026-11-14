@@ -437,3 +437,28 @@ html { scroll-padding-top: 60px; }
   .diagram { padding: 14px; border-radius: 18px; }
   .diagram-hint { display: block; }
 }
+
+/* ---------------------------------------------------------- example lyrics */
+.sp-lyrics { margin-top: 28px; padding-top: 18px; border-top: 1px solid rgba(255, 255, 255, .14); }
+.sp-lyrics-head { display: flex; justify-content: space-between; align-items: baseline; margin: 0 8px 4px; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: rgba(255, 255, 255, .55); }
+.sp-lyrics-note { font-weight: 500; letter-spacing: 0; text-transform: none; }
+.sp-view { position: relative; height: 300px; overflow: hidden; -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 74%, transparent); mask-image: linear-gradient(transparent, #000 14%, #000 74%, transparent); }
+.sp-lines { padding: 36px 0 160px; transition: transform .55s cubic-bezier(.2, .8, .2, 1); will-change: transform; }
+.sp-line { margin: 0; padding: 6px 8px; border-radius: 12px; font-size: clamp(21px, 2.6vw, 30px); font-weight: 700; line-height: 1.22; letter-spacing: -.025em; color: rgba(255, 255, 255, .34); cursor: pointer; transition: color .2s ease-out, filter .3s ease, background .2s; }
+.sp-line:hover { background: rgba(255, 255, 255, .06); }
+.sp-line.past { color: rgba(255, 255, 255, .24); }
+.sp-line.active { color: #fff; }
+.sp.playing .sp-line:not(.active) { filter: blur(.7px); }
+.sp-gap { margin-top: 20px; }
+.sp-lyrics.untimed .sp-view { overflow-y: auto; }
+.sp-lyrics.untimed .sp-lines { padding: 28px 0 70px; transform: none !important; }
+.sp-lyrics.untimed .sp-line { font-size: clamp(18px, 2vw, 22px); color: rgba(255, 255, 255, .78); cursor: default; filter: none !important; }
+.sp-lyrics.untimed .sp-line:hover { background: none; }
+@media (max-width: 760px) {
+  .sp-view { height: 250px; }
+  .sp-line { font-size: 21px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-lines, .sp-line { transition: none; }
+  .sp.playing .sp-line:not(.active) { filter: none; }
+}
