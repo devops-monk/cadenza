@@ -3,9 +3,14 @@
 # score each song keeps in the app's library: the ABC header gives the tempo,
 # the % comments the sections and the vocal voice every sung note. Each lyric
 # line starts on the note its share of syllables reaches in its section.
+# The model often makes the opening shorter than the score plans and keeps the
+# tempo after it, so every line is then moved by the offset measured in the
+# audio (needs ffmpeg and numpy).
 #   Usage: lyrics-timing.py "<library index.json>" <track id prefix or title> [...]
 import json
+import os
 import re
+import subprocess
 import sys
 from fractions import Fraction
 
@@ -66,7 +71,7 @@ def syllables(line):
     return max(1, len(re.findall(r"[aeiouyAEIOUY]+", line)) or len(line) // 3)
 
 
-def timed(track):
+def timed(track, shift=0.0):
     """([[seconds, line, starts_section], ...], synced, score seconds).
 
     Synced when every lyric section has a scored section of the same name, in
@@ -95,19 +100,68 @@ def timed(track):
         for index, (line, weight) in enumerate(zip(lines, weights)):
             start = notes[min(len(notes) - 1, round(done / total * len(notes)))]
             first = int(index == 0) if synced else firsts[index]
-            out.append([round(start, 2), line, first])
+            out.append([round(max(0.0, start - shift), 2), line, first])
             done += weight
     out = [line for line in out if line[0] < track["duration"] - 1]
     return out, synced, length
 
 
+HOP = 0.05  # seconds per frame of the curves below
+
+
+def voice_curve(path):
+    """Where a voice is likely, frame by frame: centre against sides, 250-4000 Hz."""
+    import numpy as np
+    rate = 16000
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-ac", "2", "-ar", str(rate), "-f", "f32le", "-"],
+                         check=True, capture_output=True).stdout
+    x = np.frombuffer(raw, np.float32).reshape(-1, 2)
+    mid, side = (x[:, 0] + x[:, 1]) / 2, (x[:, 0] - x[:, 1]) / 2
+    size, hop = 1024, int(rate * HOP)
+    window = np.hanning(size)
+    freqs = np.fft.rfftfreq(size, 1 / rate)
+    band = (freqs > 250) & (freqs < 4000)
+    curve = []
+    for i in range(0, len(mid) - size, hop):
+        m = (np.abs(np.fft.rfft(mid[i:i + size] * window))[band] ** 2).sum()
+        s = (np.abs(np.fft.rfft(side[i:i + size] * window))[band] ** 2).sum()
+        curve.append(np.log(m + 1e-9) - np.log(s + 1e-9))
+    curve = np.convolve(np.array(curve), np.ones(6) / 6, "same")
+    return (curve - curve.mean()) / (curve.std() + 1e-9)
+
+
+def best_lag(voice, notes, start, end):
+    """Seconds the singing comes before the score, for frames [start, end)."""
+    import numpy as np
+    lags = range(int(-10 / HOP), int(6 / HOP) + 1)
+    scores = [np.mean(voice[start:end] * notes[start + k:end + k]) if start + k >= 0 and end + k <= len(notes) else -9 for k in lags]
+    return lags[int(np.argmax(scores))] * HOP
+
+
+def measured_shift(path, abc):
+    """The offset when the whole song and most 45 s windows of it agree, else 0."""
+    import numpy as np
+    voice = voice_curve(path)
+    notes = np.zeros(len(voice))
+    for _, starts in read_score(abc)[0]:
+        for t in starts:
+            notes[int(t / HOP):int((t + 0.5) / HOP)] = 1
+    notes = (notes - notes.mean()) / (notes.std() + 1e-9)
+    whole = best_lag(voice, notes, int(10 / HOP), len(voice) - int(6 / HOP))
+    windows = [best_lag(voice, notes, s, s + int(45 / HOP)) for s in range(int(10 / HOP), len(voice) - int(51 / HOP), int(30 / HOP))]
+    agree = sum(abs(w - whole) <= 0.4 for w in windows)
+    return (round(whole, 2) if windows and agree * 2 >= len(windows) else 0.0), [round(w, 2) for w in windows]
+
+
 def main():
     library = json.load(open(sys.argv[1]))
+    folder = os.path.dirname(os.path.abspath(sys.argv[1]))
     for key in sys.argv[2:]:
         track = next(t for t in library if t["id"].startswith(key) or t["title"] == key)
-        lines, synced, length = timed(track)
+        shift, windows = measured_shift(os.path.join(folder, track["file"]), track["abc"])
+        lines, synced, length = timed(track, shift)
         print(json.dumps({"id": track["id"][:8], "title": track["title"], "synced": synced, "audio": round(track["duration"], 1),
-                          "score": round(length, 1), "lines": lines}, ensure_ascii=False))
+                          "score": round(length, 1), "shift": shift, "windows": windows, "lines": lines}, ensure_ascii=False))
 
 
 if __name__ == "__main__":
